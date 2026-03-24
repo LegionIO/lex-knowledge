@@ -19,6 +19,10 @@ if defined?(Legion::Extensions::Actors::Every)
   require_relative 'knowledge/actors/corpus_watcher'
 end
 
+if defined?(Legion::Extensions::Actors::Subscription)
+  require_relative 'knowledge/actors/corpus_ingest'
+end
+
 module Legion
   module Extensions
     module Knowledge
