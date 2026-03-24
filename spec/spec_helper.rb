@@ -12,6 +12,12 @@ module Legion
 
     module Core; end
   end
+
+  module Transport
+    class Exchange; end
+    class Queue; end
+    class Message; end
+  end
 end
 
 require 'legion/extensions/knowledge'

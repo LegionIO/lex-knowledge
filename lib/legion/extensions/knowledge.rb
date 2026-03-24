@@ -9,6 +9,12 @@ require_relative 'knowledge/runners/query'
 require_relative 'knowledge/runners/corpus'
 require_relative 'knowledge/client'
 
+if defined?(Legion::Transport)
+  require_relative 'knowledge/transport/exchanges/knowledge'
+  require_relative 'knowledge/transport/queues/ingest'
+  require_relative 'knowledge/transport/messages/ingest_message'
+end
+
 module Legion
   module Extensions
     module Knowledge
