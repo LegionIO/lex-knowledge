@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.1] - 2026-03-24
+
+### Added
+- GitHub Actions CI workflow (reusable workflows from LegionIO/.github)
+
 ## [0.1.0] - 2026-03-24
 
 ### Added
