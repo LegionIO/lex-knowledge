@@ -101,24 +101,22 @@ module Legion
           private_class_method :upsert_chunk
 
           def chunk_exists?(content_hash)
-            return false unless defined?(Legion::Extensions::Apollo)
+            return false unless defined?(Legion::Data::Model::ApolloEntry)
 
-            Legion::Extensions::Apollo::Runners::Knowledge.retrieve_relevant(
-              query:  content_hash,
-              limit:  1,
-              tags:   ['document_chunk'],
-              filter: { content_hash: content_hash }
-            ).any?
+            Legion::Data::Model::ApolloEntry
+              .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+              .where(Sequel.like(:content, "%#{content_hash}%"))
+              .any?
           rescue StandardError
             false
           end
           private_class_method :chunk_exists?
 
           def generate_embedding(content)
-            return nil unless defined?(Legion::Extensions::Apollo)
-            return nil unless defined?(Legion::Extensions::Apollo::Helpers::Embedding)
+            return nil unless defined?(Legion::LLM) && Legion::LLM.respond_to?(:embed)
 
-            Legion::Extensions::Apollo::Helpers::Embedding.generate(content)
+            result = Legion::LLM.embed(content)
+            result.is_a?(Hash) ? result[:vector] : nil
           rescue StandardError
             nil
           end
