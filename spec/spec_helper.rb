@@ -13,6 +13,13 @@ module Legion
     module Core; end
   end
 
+  module Extensions
+    module Actors
+      class Every; end
+      class Subscription; end
+    end
+  end
+
   module Transport
     class Exchange; end
     class Queue; end

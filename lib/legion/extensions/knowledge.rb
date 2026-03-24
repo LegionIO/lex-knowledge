@@ -15,6 +15,10 @@ if defined?(Legion::Transport)
   require_relative 'knowledge/transport/messages/ingest_message'
 end
 
+if defined?(Legion::Extensions::Actors::Every)
+  require_relative 'knowledge/actors/corpus_watcher'
+end
+
 module Legion
   module Extensions
     module Knowledge
