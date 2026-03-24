@@ -40,3 +40,7 @@ Naming/PredicateMethod:
 
 Style/Documentation:
   Enabled: false
+
+Lint/EmptyClass:
+  Exclude:
+    - 'spec/**/*'
