@@ -7,6 +7,7 @@ module Legion
         include Runners::Ingest
         include Runners::Query
         include Runners::Corpus
+        include Runners::Maintenance
       end
     end
   end
