@@ -16,6 +16,7 @@ if defined?(Legion::Transport)
   require_relative 'knowledge/transport/exchanges/knowledge'
   require_relative 'knowledge/transport/queues/ingest'
   require_relative 'knowledge/transport/messages/ingest_message'
+  require_relative 'knowledge/transport/messages/monitor_reload'
 end
 
 require_relative 'knowledge/actors/corpus_watcher' if defined?(Legion::Extensions::Actors::Every)
