@@ -9,6 +9,7 @@ require_relative 'knowledge/runners/ingest'
 require_relative 'knowledge/runners/query'
 require_relative 'knowledge/runners/corpus'
 require_relative 'knowledge/runners/maintenance'
+require_relative 'knowledge/runners/monitor'
 require_relative 'knowledge/client'
 
 if defined?(Legion::Transport)
