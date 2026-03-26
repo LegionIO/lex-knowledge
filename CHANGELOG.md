@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] - 2026-03-26
+
+### Added
+- `Helpers::ManifestStore`: JSON sidecar persistence for corpus manifests (`~/.legionio/knowledge/<hash>.manifest.json`). Atomic writes (write `.tmp` then rename), graceful fallback to `[]` on error.
+- `Runners::Corpus#manifest_path`: exposes the sidecar file path for CLI introspection
+- PDF and DOCX parsing via `Legion::Data::Extract` when available; falls back to `{ error: 'unsupported format' }` when absent
+- Markdown heading depth expanded from H1/H2 to full H1–H6 with correct ancestry stack (`section_path` now tracks full parent chain)
+
+### Changed
+- `Runners::Ingest#ingest_corpus` is now delta-driven: loads previous manifest, diffs against current scan, and only processes added/changed files. Removed files trigger a soft-delete signal to Apollo. `force: true` bypasses delta and processes all files. `dry_run: true` skips manifest persistence.
+- Response hash from `ingest_corpus` now includes `files_added`, `files_changed`, `files_removed` in addition to chunk counts
+
 ## [0.2.0] - 2026-03-24
 
 ### Added

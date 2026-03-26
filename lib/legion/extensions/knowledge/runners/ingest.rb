@@ -23,23 +23,32 @@ module Legion
           end
 
           def ingest_corpus(path:, dry_run: false, force: false)
-            entries = Helpers::Manifest.scan(path: path)
+            current  = Helpers::Manifest.scan(path: path)
+            previous = force ? [] : Helpers::ManifestStore.load(corpus_path: path)
+            delta    = Helpers::Manifest.diff(current: current, previous: previous)
 
-            files_scanned   = entries.size
-            chunks_created  = 0
-            chunks_skipped  = 0
-            chunks_updated  = 0
+            to_process     = delta[:added] + delta[:changed]
+            chunks_created = 0
+            chunks_skipped = 0
+            chunks_updated = 0
 
-            entries.each do |entry|
-              result = process_file(entry[:path], dry_run: dry_run, force: force)
-              chunks_created  += result[:created]
-              chunks_skipped  += result[:skipped]
-              chunks_updated  += result[:updated]
+            to_process.each do |file_path|
+              result = process_file(file_path, dry_run: dry_run, force: force)
+              chunks_created += result[:created]
+              chunks_skipped += result[:skipped]
+              chunks_updated += result[:updated]
             end
+
+            delta[:removed].each { |file_path| retire_file(file_path: file_path) } unless dry_run
+
+            Helpers::ManifestStore.save(corpus_path: path, manifest: current) unless dry_run
 
             {
               success:        true,
-              files_scanned:  files_scanned,
+              files_scanned:  current.size,
+              files_added:    delta[:added].size,
+              files_changed:  delta[:changed].size,
+              files_removed:  delta[:removed].size,
               chunks_created: chunks_created,
               chunks_skipped: chunks_skipped,
               chunks_updated: chunks_updated
@@ -143,6 +152,21 @@ module Legion
             Legion::Extensions::Apollo::Runners::Knowledge.handle_ingest(**payload)
           end
           private_class_method :ingest_to_apollo
+
+          def retire_file(file_path:)
+            return unless defined?(Legion::Apollo)
+            return unless Legion::Apollo.respond_to?(:ingest) && Legion::Apollo.started?
+
+            Legion::Apollo.ingest(
+              content:      file_path,
+              content_type: 'document_retired',
+              tags:         [file_path, 'retired', 'document_chunk'].uniq,
+              metadata:     { source_file: file_path, retired: true }
+            )
+          rescue StandardError
+            nil
+          end
+          private_class_method :retire_file
         end
       end
     end

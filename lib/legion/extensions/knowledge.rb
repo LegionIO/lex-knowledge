@@ -2,6 +2,7 @@
 
 require_relative 'knowledge/version'
 require_relative 'knowledge/helpers/manifest'
+require_relative 'knowledge/helpers/manifest_store'
 require_relative 'knowledge/helpers/parser'
 require_relative 'knowledge/helpers/chunker'
 require_relative 'knowledge/runners/ingest'

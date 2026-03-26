@@ -7,6 +7,10 @@ module Legion
         module Corpus
           module_function
 
+          def manifest_path(path:)
+            Helpers::ManifestStore.store_path(corpus_path: path)
+          end
+
           def corpus_stats(path:, extensions: nil)
             return { success: false, error: 'path does not exist' } unless ::File.exist?(path)
 
