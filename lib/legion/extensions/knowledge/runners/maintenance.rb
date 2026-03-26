@@ -62,6 +62,21 @@ module Legion
             { success: false, error: e.message }
           end
 
+          def quality_report(limit: nil)
+            resolved_limit = limit || settings_quality_limit
+
+            {
+              success:        true,
+              hot_chunks:     hot_chunks(resolved_limit),
+              cold_chunks:    cold_chunks(resolved_limit),
+              low_confidence: low_confidence_chunks(resolved_limit),
+              poor_retrieval: [],
+              summary:        quality_summary
+            }
+          rescue StandardError => e
+            { success: false, error: e.message }
+          end
+
           def build_local_stats(path, scan_entries, manifest_file, last_ingest)
             {
               corpus_path:     path,
@@ -92,7 +107,7 @@ module Legion
           def apollo_stats_from_rows(base, rows, total)
             confidences     = rows.map { |r| r[:confidence].to_f }
             with_embeddings = rows.count { |r| !r[:embedding].nil? }
-            stale_threshold = ::Legion::Settings.dig(:knowledge, :maintenance, :stale_threshold) || 0.3
+            stale_threshold = settings_stale_threshold
             timestamps      = rows.map { |r| r[:created_at] }
 
             {
@@ -180,6 +195,119 @@ module Legion
               .update(status: 'archived', updated_at: Time.now)
           end
           private_class_method :archive_orphan_entries
+
+          def hot_chunks(limit)
+            return [] unless defined?(Legion::Data::Model::ApolloEntry)
+
+            Legion::Data::Model::ApolloEntry
+              .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+              .exclude(status: 'archived')
+              .where { access_count > 0 }
+              .order(Sequel.desc(:access_count))
+              .limit(limit)
+              .select_map([:id, :access_count, :confidence,
+                           Sequel.lit("source_context->>'source_file' AS source_file")])
+              .map { |r| { id: r[0], access_count: r[1], confidence: r[2], source_file: r[3] } }
+          rescue StandardError
+            []
+          end
+          private_class_method :hot_chunks
+
+          def cold_chunks(limit)
+            return [] unless defined?(Legion::Data::Model::ApolloEntry)
+
+            days   = settings_cold_chunk_days
+            cutoff = Time.now - (days * 86_400)
+
+            Legion::Data::Model::ApolloEntry
+              .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+              .exclude(status: 'archived')
+              .where(access_count: 0)
+              .where { created_at < cutoff }
+              .order(:created_at)
+              .limit(limit)
+              .select_map([:id, :confidence, :created_at,
+                           Sequel.lit("source_context->>'source_file' AS source_file")])
+              .map { |r| { id: r[0], confidence: r[1], created_at: r[2]&.iso8601, source_file: r[3] } }
+          rescue StandardError
+            []
+          end
+          private_class_method :cold_chunks
+
+          def low_confidence_chunks(limit)
+            return [] unless defined?(Legion::Data::Model::ApolloEntry)
+
+            threshold = settings_stale_threshold
+
+            Legion::Data::Model::ApolloEntry
+              .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+              .exclude(status: 'archived')
+              .where { confidence < threshold }
+              .order(:confidence)
+              .limit(limit)
+              .select_map([:id, :confidence, :access_count,
+                           Sequel.lit("source_context->>'source_file' AS source_file")])
+              .map { |r| { id: r[0], confidence: r[1], access_count: r[2], source_file: r[3] } }
+          rescue StandardError
+            []
+          end
+          private_class_method :low_confidence_chunks
+
+          def quality_summary
+            defaults = { total_queries: 0, avg_retrieval_score: nil, chunks_never_accessed: 0,
+                         chunks_below_threshold: 0 }
+            return defaults unless defined?(Legion::Data::Model::ApolloEntry)
+
+            base = Legion::Data::Model::ApolloEntry
+                   .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+                   .exclude(status: 'archived')
+
+            {
+              total_queries:          query_count,
+              avg_retrieval_score:    nil,
+              chunks_never_accessed:  base.where(access_count: 0).count,
+              chunks_below_threshold: base.where { confidence < settings_stale_threshold }.count
+            }
+          rescue StandardError
+            defaults
+          end
+          private_class_method :quality_summary
+
+          def query_count
+            return 0 unless defined?(Legion::Data::Model::ApolloAccessLog)
+
+            Legion::Data::Model::ApolloAccessLog.where(action: 'knowledge_query').count
+          rescue StandardError
+            0
+          end
+          private_class_method :query_count
+
+          def settings_stale_threshold
+            return 0.3 unless defined?(Legion::Settings)
+
+            Legion::Settings.dig(:knowledge, :maintenance, :stale_threshold) || 0.3
+          rescue StandardError
+            0.3
+          end
+          private_class_method :settings_stale_threshold
+
+          def settings_cold_chunk_days
+            return 7 unless defined?(Legion::Settings)
+
+            Legion::Settings.dig(:knowledge, :maintenance, :cold_chunk_days) || 7
+          rescue StandardError
+            7
+          end
+          private_class_method :settings_cold_chunk_days
+
+          def settings_quality_limit
+            return 10 unless defined?(Legion::Settings)
+
+            Legion::Settings.dig(:knowledge, :maintenance, :quality_report_limit) || 10
+          rescue StandardError
+            10
+          end
+          private_class_method :settings_quality_limit
         end
       end
     end

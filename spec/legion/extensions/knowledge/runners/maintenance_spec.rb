@@ -264,4 +264,40 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Maintenance do
       end
     end
   end
+
+  describe '.quality_report' do
+    it 'returns all report sections' do
+      result = described_class.quality_report
+      expect(result[:success]).to be true
+      expect(result).to have_key(:hot_chunks)
+      expect(result).to have_key(:cold_chunks)
+      expect(result).to have_key(:low_confidence)
+      expect(result).to have_key(:poor_retrieval)
+      expect(result).to have_key(:summary)
+    end
+
+    it 'returns empty arrays when apollo is unavailable' do
+      result = described_class.quality_report
+      expect(result[:hot_chunks]).to eq([])
+      expect(result[:cold_chunks]).to eq([])
+      expect(result[:low_confidence]).to eq([])
+    end
+
+    it 'returns summary with zero counts when apollo is unavailable' do
+      result = described_class.quality_report
+      expect(result[:summary][:total_queries]).to eq(0)
+      expect(result[:summary][:chunks_never_accessed]).to eq(0)
+      expect(result[:summary][:chunks_below_threshold]).to eq(0)
+    end
+
+    it 'respects the limit parameter' do
+      result = described_class.quality_report(limit: 3)
+      expect(result[:success]).to be true
+    end
+
+    it 'returns poor_retrieval as empty array (placeholder)' do
+      result = described_class.quality_report
+      expect(result[:poor_retrieval]).to eq([])
+    end
+  end
 end
