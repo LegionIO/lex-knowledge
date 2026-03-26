@@ -42,11 +42,13 @@ module Legion
             ::FileUtils.rm_f(store_path)
 
             Runners::Ingest.ingest_corpus(path: path, force: true)
+          rescue StandardError => e
+            { success: false, error: e.message }
           end
 
           def load_manifest_files(path)
             manifest = Helpers::ManifestStore.load(corpus_path: path)
-            manifest.map { |e| e[:path] || e['path'] }.compact.uniq
+            manifest.map { |e| e[:path] }.compact.uniq
           end
           private_class_method :load_manifest_files
 
@@ -79,18 +81,11 @@ module Legion
           def archive_orphan_entries(orphan_files)
             return 0 unless defined?(Legion::Data::Model::ApolloEntry)
 
-            count = 0
-            orphan_files.each do |file|
-              updated = Legion::Data::Model::ApolloEntry
-                .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
-                .where(Sequel.lit("source_context->>'source_file' = ?", file))
-                .exclude(status: 'archived')
-                .update(status: 'archived', updated_at: Time.now)
-              count += updated
-            end
-            count
-          rescue StandardError
-            0
+            Legion::Data::Model::ApolloEntry
+              .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+              .where(Sequel.lit("source_context->>'source_file' IN ?", orphan_files))
+              .exclude(status: 'archived')
+              .update(status: 'archived', updated_at: Time.now)
           end
           private_class_method :archive_orphan_entries
         end
