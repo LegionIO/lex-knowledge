@@ -18,6 +18,7 @@ if defined?(Legion::Transport)
 end
 
 require_relative 'knowledge/actors/corpus_watcher' if defined?(Legion::Extensions::Actors::Every)
+require_relative 'knowledge/actors/maintenance_runner' if defined?(Legion::Extensions::Actors::Every)
 
 require_relative 'knowledge/actors/corpus_ingest' if defined?(Legion::Extensions::Actors::Subscription)
 
