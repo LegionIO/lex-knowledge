@@ -49,8 +49,8 @@ end
 private_class_method :upsert_chunk_with_embedding
 ```
 
-Keep the original `upsert_chunk` private method intact (it is used by `ingest_file` via `process_file`
-for single-file ingestion where batching adds no value).
+The original `upsert_chunk` method and `generate_embedding` single-call helper were removed. All paths
+(including `ingest_file`) now route through `batch_embed_chunks`; single-file is a batch of one.
 
 ### Task 1.3 — Update `process_file` to use batch path
 
@@ -298,7 +298,7 @@ module Legion
           end
 
           def text_response(data)
-            ::MCP::Tool::Response.new([{ type: 'text', text: Legion::JSON.dump(data) }])
+            ::MCP::Tool::Response.new([{ type: 'text', text: Legion::JSON.dump({ **data }) }])
           end
 
           def error_response(msg)
@@ -345,7 +345,7 @@ Cover:
 |------|---------|-----|--------|
 | lex-knowledge | 0.3.0 | 0.4.0 | batch embedding changes ingest behavior |
 | LegionIO | 1.5.18 | 1.5.19 | new `knowledge` subcommand |
-| legion-mcp | 0.5.7 | 0.5.8 | new `legion.query_knowledge` tool (42 tools total) |
+| legion-mcp | 0.5.7 | 0.5.8 | new `legion.query_knowledge` tool (57 tools total) |
 
 ## Spec Counts Expected
 

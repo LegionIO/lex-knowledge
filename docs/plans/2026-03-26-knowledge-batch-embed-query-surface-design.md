@@ -82,9 +82,9 @@ end
 instead of calling `generate_embedding` internally.
 
 **Fallback**: if `embed_batch` raises or returns partial errors, affected chunks get `nil` embedding
-and are still ingested (just without a vector for semantic search). The old `generate_embedding`
-single-call helper is retained as a private fallback for `ingest_file` (single-file ad-hoc ingestion
-where batching adds no value).
+and are still ingested (just without a vector for semantic search). `ingest_file` also routes through
+`batch_embed_chunks` — for a single-file call this is a batch of one, which is fine. The old
+`generate_embedding` single-call helper was removed; the batch path handles all cases.
 
 ### 2. `legion knowledge` CLI subcommand in LegionIO
 
