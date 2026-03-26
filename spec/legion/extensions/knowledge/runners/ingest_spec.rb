@@ -44,8 +44,7 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
   end
 
   describe 'batch embedding' do
-    let(:tmp_dir)   { Dir.mktmpdir }
-    let(:file_path) { File.join(tmp_dir, 'batch.md') }
+    let(:file_path) { '/tmp/batch_test.md' }
     let(:chunk_a)   do
       { content: 'Chunk A', content_hash: 'hash_a', source_file: file_path, heading: 'H1', section_path: ['H1'], chunk_index: 0, token_count: 10 }
     end
@@ -54,16 +53,11 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
     end
     let(:chunks) { [chunk_a, chunk_b] }
 
-    before { File.write(file_path, "# H1\n\nChunk A\n\nChunk B") }
-    after  { FileUtils.remove_entry(tmp_dir) }
-
     describe '.batch_embed_chunks (via process_file)' do
       context 'when Legion::LLM is not defined' do
         before { hide_const('Legion::LLM') if defined?(Legion::LLM) }
 
         it 'returns nil embeddings for all chunks without raising' do
-          allow(Legion::Extensions::Knowledge::Helpers::Parser).to receive(:parse).and_return([{ content: 'Chunk A', heading: 'H1', section_path: ['H1'] }])
-          allow(Legion::Extensions::Knowledge::Helpers::Chunker).to receive(:chunk).and_return(chunks)
           result = described_class.send(:batch_embed_chunks, chunks, force: false)
           expect(result).to all(include(embedding: nil))
           expect(result.size).to eq(2)

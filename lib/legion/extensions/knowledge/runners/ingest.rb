@@ -87,7 +87,7 @@ module Legion
             updated = 0
 
             paired.each do |p|
-              outcome = upsert_chunk_with_embedding(p[:chunk], p[:embedding], dry_run: dry_run, force: force)
+              outcome = upsert_chunk_with_embedding(p[:chunk], p[:embedding], dry_run: dry_run, force: force, exists: p[:exists] || false)
               case outcome
               when :created then created += 1
               when :skipped then skipped += 1
@@ -100,18 +100,32 @@ module Legion
           private_class_method :process_file
 
           def batch_embed_chunks(chunks, force:)
-            nil_pairs = chunks.map { |c| { chunk: c, embedding: nil } }
-            return nil_pairs unless defined?(Legion::LLM) && Legion::LLM.respond_to?(:embed_batch)
+            exists_map = force ? {} : build_exists_map(chunks)
+            return paired_without_embed(chunks, exists_map) unless llm_embed_available?
 
-            needs_embed = force ? chunks : chunks.reject { |c| chunk_exists?(c[:content_hash]) }
-            return nil_pairs if needs_embed.empty?
+            needs_embed = force ? chunks : chunks.reject { |c| exists_map[c[:content_hash]] }
+            embed_map   = needs_embed.empty? ? {} : build_embed_map(needs_embed)
 
-            embed_map = build_embed_map(needs_embed)
-            chunks.map { |c| { chunk: c, embedding: embed_map[c[:content_hash]] } }
+            chunks.map { |c| { chunk: c, embedding: embed_map[c[:content_hash]], exists: exists_map.fetch(c[:content_hash], false) } }
           rescue StandardError
-            chunks.map { |c| { chunk: c, embedding: nil } }
+            paired_without_embed(chunks, {})
           end
           private_class_method :batch_embed_chunks
+
+          def build_exists_map(chunks)
+            chunks.to_h { |c| [c[:content_hash], chunk_exists?(c[:content_hash])] }
+          end
+          private_class_method :build_exists_map
+
+          def llm_embed_available?
+            defined?(Legion::LLM) && Legion::LLM.respond_to?(:embed_batch)
+          end
+          private_class_method :llm_embed_available?
+
+          def paired_without_embed(chunks, exists_map)
+            chunks.map { |c| { chunk: c, embedding: nil, exists: exists_map.fetch(c[:content_hash], false) } }
+          end
+          private_class_method :paired_without_embed
 
           def build_embed_map(needs_embed)
             results = Legion::LLM.embed_batch(needs_embed.map { |c| c[:content] })
@@ -123,10 +137,10 @@ module Legion
           end
           private_class_method :build_embed_map
 
-          def upsert_chunk_with_embedding(chunk, embedding, dry_run: false, force: false)
+          def upsert_chunk_with_embedding(chunk, embedding, dry_run: false, force: false, exists: false)
             return :created if dry_run
             return :created unless defined?(Legion::Extensions::Apollo)
-            return :skipped if !force && chunk_exists?(chunk[:content_hash])
+            return :skipped if !force && exists
 
             ingest_to_apollo(chunk, embedding)
             force ? :updated : :created
