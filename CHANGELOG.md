@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0] - 2026-03-26
+
+### Changed
+- Batch embedding in ingest pipeline: `process_file` now calls `Legion::LLM.embed_batch` once per file instead of one embed call per chunk, reducing API round-trips significantly
+- Added `batch_embed_chunks` and `upsert_chunk_with_embedding` private methods to support batched ingest path
+- Graceful fallback: if `embed_batch` fails or LLM is unavailable, chunks ingest without embeddings (closes #2)
+
 ## [0.3.0] - 2026-03-26
 
 ### Added
