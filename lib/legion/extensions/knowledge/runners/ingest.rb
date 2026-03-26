@@ -22,7 +22,16 @@ module Legion
             }
           end
 
-          def ingest_corpus(path:, dry_run: false, force: false)
+          def ingest_corpus(path: nil, monitors: nil, dry_run: false, force: false)
+            return ingest_monitors(monitors: monitors, dry_run: dry_run, force: force) if monitors&.any?
+            raise ArgumentError, 'path is required when monitors is not provided' if path.nil?
+
+            ingest_corpus_path(path: path, dry_run: dry_run, force: force)
+          rescue ArgumentError => e
+            { success: false, error: e.message }
+          end
+
+          def ingest_corpus_path(path:, dry_run: false, force: false)
             current  = Helpers::Manifest.scan(path: path)
             previous = force ? [] : Helpers::ManifestStore.load(corpus_path: path)
             delta    = Helpers::Manifest.diff(current: current, previous: previous)
@@ -56,6 +65,35 @@ module Legion
           rescue StandardError => e
             { success: false, error: e.message }
           end
+          private_class_method :ingest_corpus_path
+
+          def ingest_monitors(monitors:, dry_run: false, force: false)
+            results = monitors.map do |monitor|
+              ingest_corpus(path: monitor[:path], dry_run: dry_run, force: force)
+            rescue StandardError => e
+              { success: false, path: monitor[:path], error: e.message }
+            end
+
+            total = {
+              files_scanned:  0,
+              files_added:    0,
+              files_changed:  0,
+              files_removed:  0,
+              chunks_created: 0,
+              chunks_skipped: 0,
+              chunks_updated: 0
+            }
+            results.each do |r|
+              next unless r[:success]
+
+              total.each_key { |k| total[k] += r[k].to_i }
+            end
+
+            { success: true, monitors_processed: results.size, **total }
+          rescue StandardError => e
+            { success: false, error: e.message }
+          end
+          private_class_method :ingest_monitors
 
           def ingest_file(file_path:, force: false)
             result = process_file(file_path, dry_run: false, force: force)

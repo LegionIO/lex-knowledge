@@ -21,23 +21,21 @@ module Legion
           end
 
           def enabled?
-            corpus_path && !corpus_path.empty?
+            resolve_monitors.any?
           rescue StandardError
             false
           end
 
           def args
-            { path: corpus_path }
+            { monitors: resolve_monitors }
           end
 
           private
 
-          def corpus_path
-            return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
-
-            Legion::Settings.dig(:knowledge, :corpus_path)
+          def resolve_monitors
+            Runners::Monitor.resolve_monitors
           rescue StandardError
-            nil
+            []
           end
         end
       end
