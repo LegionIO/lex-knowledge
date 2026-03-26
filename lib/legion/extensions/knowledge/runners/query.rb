@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'digest'
+
 module Legion
   module Extensions
     module Knowledge
@@ -17,15 +19,21 @@ module Legion
 
             latency_ms = ((::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started) * 1000).round
 
+            score = average_score(chunks)
+            unless chunks.empty?
+              record_feedback(
+                question:        question,
+                chunk_ids:       chunks.filter_map { |c| c[:id] },
+                retrieval_score: score.to_f,
+                synthesized:     synthesize && llm_available?
+              )
+            end
+
             {
               success:  true,
               answer:   answer,
               sources:  chunks.map { |c| format_source(c) },
-              metadata: {
-                retrieval_score: average_score(chunks),
-                chunk_count:     chunks.size,
-                latency_ms:      latency_ms
-              }
+              metadata: build_metadata(chunks, score, latency_ms)
             }
           rescue StandardError => e
             { success: false, error: e.message }
@@ -38,10 +46,22 @@ module Legion
             {
               success:  true,
               sources:  chunks.map { |c| format_source(c) },
-              metadata: {
-                chunk_count: chunks.size
-              }
+              metadata: build_metadata(chunks, average_score(chunks))
             }
+          rescue StandardError => e
+            { success: false, error: e.message }
+          end
+
+          def record_feedback(question:, chunk_ids:, retrieval_score:, synthesized: true, rating: nil)
+            question_hash = ::Digest::SHA256.hexdigest(question.to_s)[0, 16]
+            emit_feedback_event(
+              question_hash:   question_hash,
+              chunk_ids:       chunk_ids,
+              retrieval_score: retrieval_score,
+              synthesized:     synthesized,
+              rating:          rating
+            )
+            { success: true, question_hash: question_hash, rating: rating }
           rescue StandardError => e
             { success: false, error: e.message }
           end
@@ -96,6 +116,53 @@ module Legion
             (scores.sum.to_f / scores.size).round(4)
           end
           private_class_method :average_score
+
+          def build_metadata(chunks, score, latency_ms = nil)
+            confidences = chunks.filter_map { |c| c[:confidence] }
+            distances   = chunks.filter_map { |c| c[:distance] }
+            source_names = chunks.filter_map do |c|
+              c.dig(:metadata, :source_file) || c[:source_file]
+            end.uniq
+            statuses = chunks.group_by { |c| c[:status] }.transform_values(&:size)
+
+            meta = {
+              retrieval_score:   score,
+              chunk_count:       chunks.size,
+              confidence_avg:    confidences.empty? ? nil : (confidences.sum.to_f / confidences.size).round(4),
+              confidence_range:  confidences.empty? ? nil : confidences.minmax,
+              distance_range:    distances.empty?   ? nil : distances.minmax,
+              source_files:      source_names,
+              source_file_count: source_names.size,
+              all_embedded:      chunks.none? { |c| zero_embedding?(c) },
+              statuses:          statuses
+            }
+            meta[:latency_ms] = latency_ms unless latency_ms.nil?
+            meta
+          end
+          private_class_method :build_metadata
+
+          def zero_embedding?(chunk)
+            emb = chunk[:embedding]
+            return true if emb.nil?
+
+            emb.is_a?(Array) && (emb.empty? || emb.all?(&:zero?))
+          end
+          private_class_method :zero_embedding?
+
+          def emit_feedback_event(question_hash:, chunk_ids:, retrieval_score:, synthesized:, rating:)
+            return unless defined?(Legion::Events)
+
+            Legion::Events.emit('knowledge.query_feedback', {
+                                  question_hash:   question_hash,
+                                  chunk_ids:       chunk_ids,
+                                  retrieval_score: retrieval_score,
+                                  synthesized:     synthesized,
+                                  rating:          rating
+                                })
+          rescue StandardError
+            nil
+          end
+          private_class_method :emit_feedback_event
 
           def llm_available?
             defined?(Legion::LLM)
