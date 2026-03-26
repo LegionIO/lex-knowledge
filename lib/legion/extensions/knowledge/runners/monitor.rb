@@ -24,14 +24,10 @@ module Legion
 
           def add_monitor(path:, extensions: nil, label: nil)
             abs_path = File.expand_path(path)
-            unless File.directory?(abs_path)
-              return { success: false, error: "Path #{abs_path} does not exist or is not a directory" }
-            end
+            return { success: false, error: "Path #{abs_path} does not exist or is not a directory" } unless File.directory?(abs_path)
 
             existing = Array(read_monitors_setting)
-            if existing.any? { |m| m[:path] == abs_path }
-              return { success: false, error: "Path #{abs_path} is already registered" }
-            end
+            return { success: false, error: "Path #{abs_path} is already registered" } if existing.any? { |m| m[:path] == abs_path }
 
             entry = {
               path:       abs_path,

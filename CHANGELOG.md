@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `Runners::Monitor` module for multi-directory corpus management
+- `add_monitor`, `remove_monitor`, `list_monitors`, `monitor_status`, `resolve_monitors` runner methods
+- `MonitorReload` transport message (`knowledge.monitor.reload`) for hot-reload signaling
+- `CorpusWatcher` now iterates `monitors[]` array instead of single `corpus_path`
+
+### Changed
+- `ingest_corpus` accepts optional `monitors:` kwarg for batch multi-path ingestion
+- `CorpusWatcher#enabled?` uses `Runners::Monitor.resolve_monitors` (backwards compat with legacy `corpus_path`)
+
 ## [0.5.0] - 2026-03-26
 
 ### Added

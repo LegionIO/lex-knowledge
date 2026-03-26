@@ -11,7 +11,7 @@ Document ingestion pipeline for LegionIO. Scans file corpora (markdown, text, PD
 ## Gem Info
 
 - **Gem name**: `lex-knowledge`
-- **Version**: `0.5.0`
+- **Version**: `0.6.0`
 - **Module**: `Legion::Extensions::Knowledge`
 - **Ruby**: `>= 3.4`
 - **License**: MIT
@@ -68,7 +68,7 @@ spec/
 | Path | Purpose |
 |---|---|
 | `lib/legion/extensions/knowledge.rb` | Entry point — requires all helpers, runners, client; conditionally loads transport (when `Legion::Transport` defined) and actors (when actor base classes defined) |
-| `lib/legion/extensions/knowledge/version.rb` | `VERSION = '0.5.0'` |
+| `lib/legion/extensions/knowledge/version.rb` | `VERSION = '0.6.0'` |
 | `lib/legion/extensions/knowledge/client.rb` | `Client` class — includes `Runners::Ingest`, `Runners::Query`, `Runners::Corpus`, `Runners::Maintenance` |
 | `lib/legion/extensions/knowledge/helpers/manifest.rb` | `scan(path:, extensions:)` walks a directory tree and builds SHA256 fingerprint entries; `diff` computes added/changed/removed against a saved manifest |
 | `lib/legion/extensions/knowledge/helpers/manifest_store.rb` | `load`/`save` sidecar JSON at `~/.legionio/knowledge/<16-char-sha>.manifest.json`; atomic write via `.tmp` + rename |
@@ -132,7 +132,7 @@ knowledge:
 
 ```bash
 bundle install
-bundle exec rspec       # 143 examples, 0 failures
+bundle exec rspec       # 182 examples, 0 failures
 bundle exec rubocop     # 0 offenses
 ```
 

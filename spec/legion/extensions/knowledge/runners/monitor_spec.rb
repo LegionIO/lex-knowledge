@@ -188,7 +188,7 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Monitor do
       it 'returns success: false' do
         result = described_class.remove_monitor(identifier: 'nonexistent')
         expect(result[:success]).to be false
-        expect(result[:error]).to include("not found")
+        expect(result[:error]).to include('not found')
       end
     end
   end
