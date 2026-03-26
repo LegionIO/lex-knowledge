@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0] - 2026-03-26
+
+### Added
+- `Runners::Maintenance` module: `detect_orphans`, `cleanup_orphans`, `reindex`, `health`, `quality_report`
+- `Runners::Query#record_feedback` for explicit quality feedback with SHA256 question hashing
+- Enriched response metadata in `query()` and `retrieve()`: confidence_avg, confidence_range, distance_range, source_files, source_file_count, all_embedded, statuses
+- Implicit feedback tracking: `query()` auto-records feedback after successful retrieval
+- `Actor::MaintenanceRunner`: periodic health check actor (6-hour default interval)
+- `quality_report` surfaces hot chunks, cold chunks, low-confidence chunks, and summary stats
+
+### Changed
+- `query()` metadata hash now includes 7 additional fields (backwards-compatible addition)
+- `retrieve()` metadata hash now matches `query()` structure (minus latency_ms)
+
 ## [0.4.0] - 2026-03-26
 
 ### Changed

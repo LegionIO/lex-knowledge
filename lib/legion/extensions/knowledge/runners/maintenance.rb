@@ -202,7 +202,7 @@ module Legion
             Legion::Data::Model::ApolloEntry
               .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
               .exclude(status: 'archived')
-              .where { access_count > 0 }
+              .where { access_count.positive? }
               .order(Sequel.desc(:access_count))
               .limit(limit)
               .select_map([:id, :access_count, :confidence,
