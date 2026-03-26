@@ -46,6 +46,98 @@ module Legion
             { success: false, error: e.message }
           end
 
+          def health(path:)
+            scan_entries  = Helpers::Manifest.scan(path: path)
+            store_path    = Helpers::ManifestStore.store_path(corpus_path: path)
+            manifest_file = ::File.exist?(store_path)
+            last_ingest   = manifest_file ? ::File.mtime(store_path).iso8601 : nil
+
+            {
+              success: true,
+              local:   build_local_stats(path, scan_entries, manifest_file, last_ingest),
+              apollo:  build_apollo_stats,
+              sync:    build_sync_stats(path, scan_entries)
+            }
+          rescue StandardError => e
+            { success: false, error: e.message }
+          end
+
+          def build_local_stats(path, scan_entries, manifest_file, last_ingest)
+            {
+              corpus_path:     path,
+              file_count:      scan_entries.size,
+              total_bytes:     scan_entries.sum { |e| e[:size] },
+              manifest_exists: manifest_file,
+              last_ingest:     last_ingest
+            }
+          end
+          private_class_method :build_local_stats
+
+          def build_apollo_stats
+            return apollo_defaults unless defined?(Legion::Data::Model::ApolloEntry)
+
+            base  = Legion::Data::Model::ApolloEntry
+                    .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+                    .exclude(status: 'archived')
+            total = base.count
+            return apollo_defaults if total.zero?
+
+            rows = base.select(:confidence, :status, :access_count, :embedding, :created_at).all
+            apollo_stats_from_rows(base, rows, total)
+          rescue StandardError
+            apollo_defaults
+          end
+          private_class_method :build_apollo_stats
+
+          def apollo_stats_from_rows(base, rows, total)
+            confidences     = rows.map { |r| r[:confidence].to_f }
+            with_embeddings = rows.count { |r| !r[:embedding].nil? }
+            stale_threshold = ::Legion::Settings.dig(:knowledge, :maintenance, :stale_threshold) || 0.3
+            timestamps      = rows.map { |r| r[:created_at] }
+
+            {
+              total_chunks:        total,
+              by_status:           base.group_and_count(:status).as_hash(:status, :count).transform_keys(&:to_sym),
+              embedding_coverage:  (with_embeddings.to_f / total).round(4),
+              avg_confidence:      confidences.sum / confidences.size.to_f,
+              confidence_range:    confidences.minmax,
+              stale_count:         confidences.count { |c| c < stale_threshold },
+              never_accessed:      rows.count { |r| r[:access_count].to_i.zero? },
+              unique_source_files: load_apollo_source_files.size,
+              oldest_chunk:        timestamps.min&.iso8601,
+              newest_chunk:        timestamps.max&.iso8601
+            }
+          end
+          private_class_method :apollo_stats_from_rows
+
+          def apollo_defaults
+            {
+              total_chunks:        0,
+              by_status:           {},
+              embedding_coverage:  0.0,
+              avg_confidence:      0.0,
+              confidence_range:    [0.0, 0.0],
+              stale_count:         0,
+              never_accessed:      0,
+              unique_source_files: 0,
+              oldest_chunk:        nil,
+              newest_chunk:        nil
+            }
+          end
+          private_class_method :apollo_defaults
+
+          def build_sync_stats(path, scan_entries)
+            manifest_paths = load_manifest_files(path)
+            apollo_paths   = load_apollo_source_files
+            scan_paths     = scan_entries.map { |e| e[:path] }
+
+            {
+              orphan_count:  (apollo_paths - manifest_paths).size,
+              missing_count: (scan_paths - apollo_paths).size
+            }
+          end
+          private_class_method :build_sync_stats
+
           def load_manifest_files(path)
             manifest = Helpers::ManifestStore.load(corpus_path: path)
             manifest.map { |e| e[:path] }.compact.uniq
