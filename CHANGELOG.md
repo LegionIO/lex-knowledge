@@ -12,6 +12,11 @@
 - `ingest_corpus` accepts optional `monitors:` kwarg for batch multi-path ingestion
 - `CorpusWatcher#enabled?` uses `Runners::Monitor.resolve_monitors` (backwards compat with legacy `corpus_path`)
 
+## [0.6.1] - 2026-03-26
+
+### Changed
+- set remote_invocable? false for local dispatch
+
 ## [0.5.0] - 2026-03-26
 
 ### Added
