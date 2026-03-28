@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- `Runners::Ingest#ingest_content` — accepts string content directly for network absorbers, skips file extraction
 - `Runners::Monitor` module for multi-directory corpus management
 - `add_monitor`, `remove_monitor`, `list_monitors`, `monitor_status`, `resolve_monitors` runner methods
 - `MonitorReload` transport message (`knowledge.monitor.reload`) for hot-reload signaling

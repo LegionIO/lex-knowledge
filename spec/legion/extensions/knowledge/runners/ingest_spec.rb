@@ -145,6 +145,24 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
     end
   end
 
+  describe '#ingest_content' do
+    it 'accepts string content directly' do
+      result = described_class.ingest_content(
+        content:     'This is meeting transcript text with enough words to form a chunk.',
+        source_type: :meeting_transcript,
+        metadata:    { meeting_id: 'abc-123' }
+      )
+      expect(result[:chunks]).to be_a(Integer)
+      expect(result[:chunks]).to be > 0
+    end
+
+    it 'chunks and embeds string content' do
+      allow(Legion::LLM).to receive(:embed_batch).and_return([]) if defined?(Legion::LLM)
+      result = described_class.ingest_content(content: 'Short text content for testing.', source_type: :text)
+      expect(result[:status]).to eq(:ingested)
+    end
+  end
+
   describe '.ingest_corpus — delta behavior' do
     let(:tmp_dir)   { Dir.mktmpdir }
     let(:store_dir) { Dir.mktmpdir }
