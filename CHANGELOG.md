@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.3] - 2026-03-28
+
+### Fixed
+- `CorpusWatcher` and `MaintenanceRunner` actors now override `time` instead of `every_interval` — the `Every` actor base class uses `time` for `Concurrent::TimerTask` interval, causing both actors to fire every 1 second instead of 300s/21600s
+
 ## [Unreleased]
 
 ### Added
