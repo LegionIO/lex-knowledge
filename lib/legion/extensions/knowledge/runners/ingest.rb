@@ -9,6 +9,11 @@ module Legion
         module Ingest
           module_function
 
+          def log
+            Legion::Logging
+          end
+          private_class_method :log
+
           def scan_corpus(path:, extensions: nil)
             opts = { path: path }
             opts[:extensions] = extensions if extensions
@@ -30,6 +35,7 @@ module Legion
 
             ingest_corpus_path(path: path, dry_run: dry_run, force: force)
           rescue ArgumentError => e
+            log.warn(e.message)
             { success: false, error: e.message }
           end
 
@@ -65,6 +71,7 @@ module Legion
               chunks_updated: chunks_updated
             }
           rescue StandardError => e
+            log.warn(e.message)
             { success: false, error: e.message }
           end
           private_class_method :ingest_corpus_path
@@ -73,6 +80,7 @@ module Legion
             results = monitors.map do |monitor|
               ingest_corpus(path: monitor[:path], dry_run: dry_run, force: force)
             rescue StandardError => e
+              log.warn(e.message)
               { success: false, path: monitor[:path], error: e.message }
             end
 
@@ -93,6 +101,7 @@ module Legion
 
             { success: true, monitors_processed: results.size, **total }
           rescue StandardError => e
+            log.warn(e.message)
             { success: false, error: e.message }
           end
           private_class_method :ingest_monitors
@@ -110,6 +119,7 @@ module Legion
             paired.each { |p| upsert_chunk_with_embedding(p[:chunk], p[:embedding], force: false, exists: p[:exists] || false) }
             { status: :ingested, chunks: chunks.size, source_type: source_type, metadata: metadata }
           rescue StandardError => e
+            log.warn(e.message)
             { status: :failed, error: e.message, source_type: source_type, metadata: metadata }
           end
 
@@ -124,6 +134,7 @@ module Legion
               chunks_updated: result[:updated]
             }
           rescue StandardError => e
+            log.warn(e.message)
             { success: false, error: e.message }
           end
 
@@ -164,7 +175,7 @@ module Legion
 
             chunks.map { |c| { chunk: c, embedding: embed_map[c[:content_hash]], exists: exists_map.fetch(c[:content_hash], false) } }
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             paired_without_embed(chunks, {})
           end
           private_class_method :batch_embed_chunks
@@ -190,7 +201,7 @@ module Legion
               h[needs_embed[r[:index]][:content_hash]] = r[:vector] unless r[:error]
             end
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             {}
           end
           private_class_method :build_embed_map
@@ -203,7 +214,7 @@ module Legion
             ingest_to_apollo(chunk, embedding)
             force ? :updated : :created
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             :skipped
           end
           private_class_method :upsert_chunk_with_embedding
@@ -216,7 +227,7 @@ module Legion
               .where(Sequel.like(:content, "%#{content_hash}%"))
               .any?
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             false
           end
           private_class_method :chunk_exists?
@@ -254,7 +265,7 @@ module Legion
               metadata:     { source_file: file_path, retired: true }
             )
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             nil
           end
           private_class_method :retire_file

@@ -17,14 +17,14 @@ module Legion
               300
             end
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             300
           end
 
           def enabled?
             resolve_monitors.any?
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             false
           end
 
@@ -34,10 +34,14 @@ module Legion
 
           private
 
+          def log
+            Legion::Logging
+          end
+
           def resolve_monitors
             Runners::Monitor.resolve_monitors
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             []
           end
         end

@@ -17,7 +17,7 @@ module Legion
               21_600
             end
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             21_600
           end
 
@@ -26,7 +26,7 @@ module Legion
 
             true
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             false
           end
 
@@ -36,12 +36,16 @@ module Legion
 
           private
 
+          def log
+            Legion::Logging
+          end
+
           def corpus_path
             return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
 
             Legion::Settings.dig(:knowledge, :corpus_path)
           rescue StandardError => e
-            Legion::Logging.warn(e.message)
+            log.warn(e.message)
             nil
           end
         end
