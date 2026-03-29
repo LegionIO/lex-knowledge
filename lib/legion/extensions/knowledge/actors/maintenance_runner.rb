@@ -16,7 +16,8 @@ module Legion
             else
               21_600
             end
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             21_600
           end
 
@@ -24,7 +25,8 @@ module Legion
             return false unless corpus_path && !corpus_path.empty?
 
             true
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             false
           end
 
@@ -38,7 +40,8 @@ module Legion
             return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
 
             Legion::Settings.dig(:knowledge, :corpus_path)
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             nil
           end
         end

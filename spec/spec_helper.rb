@@ -20,6 +20,14 @@ module Legion
     end
   end
 
+  module Logging
+    def self.debug(msg = nil); end
+    def self.info(msg = nil); end
+    def self.warn(msg = nil); end
+    def self.error(msg = nil); end
+    def self.fatal(msg = nil); end
+  end
+
   module Transport
     class Exchange; end
     class Queue; end

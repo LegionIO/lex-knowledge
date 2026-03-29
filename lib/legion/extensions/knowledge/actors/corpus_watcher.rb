@@ -16,13 +16,15 @@ module Legion
             else
               300
             end
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             300
           end
 
           def enabled?
             resolve_monitors.any?
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             false
           end
 
@@ -34,7 +36,8 @@ module Legion
 
           def resolve_monitors
             Runners::Monitor.resolve_monitors
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             []
           end
         end

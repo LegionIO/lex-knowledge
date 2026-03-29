@@ -163,7 +163,8 @@ module Legion
             embed_map   = needs_embed.empty? ? {} : build_embed_map(needs_embed)
 
             chunks.map { |c| { chunk: c, embedding: embed_map[c[:content_hash]], exists: exists_map.fetch(c[:content_hash], false) } }
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             paired_without_embed(chunks, {})
           end
           private_class_method :batch_embed_chunks
@@ -188,7 +189,8 @@ module Legion
             results.each_with_object({}) do |r, h|
               h[needs_embed[r[:index]][:content_hash]] = r[:vector] unless r[:error]
             end
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             {}
           end
           private_class_method :build_embed_map
@@ -200,7 +202,8 @@ module Legion
 
             ingest_to_apollo(chunk, embedding)
             force ? :updated : :created
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             :skipped
           end
           private_class_method :upsert_chunk_with_embedding
@@ -212,7 +215,8 @@ module Legion
               .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
               .where(Sequel.like(:content, "%#{content_hash}%"))
               .any?
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             false
           end
           private_class_method :chunk_exists?
@@ -249,7 +253,8 @@ module Legion
               tags:         [file_path, 'retired', 'document_chunk'].uniq,
               metadata:     { source_file: file_path, retired: true }
             )
-          rescue StandardError
+          rescue StandardError => e
+            Legion::Logging.warn(e.message)
             nil
           end
           private_class_method :retire_file
