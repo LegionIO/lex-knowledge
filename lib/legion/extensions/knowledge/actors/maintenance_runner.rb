@@ -10,7 +10,7 @@ module Legion
           def check_subtask?  = false
           def generate_task?  = false
 
-          def every_interval
+          def time
             if defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
               Legion::Settings.dig(:knowledge, :actors, :maintenance_interval) || 21_600
             else

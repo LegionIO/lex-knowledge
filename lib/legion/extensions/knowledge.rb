@@ -28,6 +28,10 @@ module Legion
   module Extensions
     module Knowledge
       extend Legion::Extensions::Core if defined?(Legion::Extensions::Core)
+
+      def self.remote_invocable?
+        false
+      end
     end
   end
 end

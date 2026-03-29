@@ -17,11 +17,11 @@ RSpec.describe Legion::Extensions::Knowledge::Actor::CorpusWatcher do
   end
 
   it 'has a configurable interval' do
-    expect(instance.respond_to?(:every_interval)).to be true
+    expect(instance.respond_to?(:time)).to be true
   end
 
   it 'defaults interval to 300' do
-    expect(instance.every_interval).to eq(300)
+    expect(instance.time).to eq(300)
   end
 
   describe '#enabled?' do

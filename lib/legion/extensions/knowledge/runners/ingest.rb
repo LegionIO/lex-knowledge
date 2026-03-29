@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'securerandom'
+
 module Legion
   module Extensions
     module Knowledge
@@ -94,6 +96,22 @@ module Legion
             { success: false, error: e.message }
           end
           private_class_method :ingest_monitors
+
+          def ingest_content(content:, source_type: :text, metadata: {})
+            source_path = "content://#{source_type}/#{SecureRandom.uuid}"
+            section = {
+              content:      content,
+              heading:      source_type.to_s,
+              section_path: [source_type.to_s],
+              source_file:  source_path
+            }
+            chunks = Helpers::Chunker.chunk(sections: [section])
+            paired = batch_embed_chunks(chunks, force: false)
+            paired.each { |p| upsert_chunk_with_embedding(p[:chunk], p[:embedding], force: false, exists: p[:exists] || false) }
+            { status: :ingested, chunks: chunks.size, source_type: source_type, metadata: metadata }
+          rescue StandardError => e
+            { status: :failed, error: e.message, source_type: source_type, metadata: metadata }
+          end
 
           def ingest_file(file_path:, force: false)
             result = process_file(file_path, dry_run: false, force: force)

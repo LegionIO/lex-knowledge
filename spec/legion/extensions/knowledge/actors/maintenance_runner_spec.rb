@@ -17,7 +17,7 @@ RSpec.describe Legion::Extensions::Knowledge::Actor::MaintenanceRunner do
 
   it 'defaults interval to 21600 seconds (6 hours)' do
     instance = described_class.allocate
-    expect(instance.every_interval).to eq(21_600)
+    expect(instance.time).to eq(21_600)
   end
 
   it 'responds to enabled?' do

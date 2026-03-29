@@ -1,8 +1,14 @@
 # Changelog
 
+## [0.6.3] - 2026-03-28
+
+### Fixed
+- `CorpusWatcher` and `MaintenanceRunner` actors now override `time` instead of `every_interval` — the `Every` actor base class uses `time` for `Concurrent::TimerTask` interval, causing both actors to fire every 1 second instead of 300s/21600s
+
 ## [Unreleased]
 
 ### Added
+- `Runners::Ingest#ingest_content` — accepts string content directly for network absorbers, skips file extraction
 - `Runners::Monitor` module for multi-directory corpus management
 - `add_monitor`, `remove_monitor`, `list_monitors`, `monitor_status`, `resolve_monitors` runner methods
 - `MonitorReload` transport message (`knowledge.monitor.reload`) for hot-reload signaling
@@ -11,6 +17,11 @@
 ### Changed
 - `ingest_corpus` accepts optional `monitors:` kwarg for batch multi-path ingestion
 - `CorpusWatcher#enabled?` uses `Runners::Monitor.resolve_monitors` (backwards compat with legacy `corpus_path`)
+
+## [0.6.1] - 2026-03-26
+
+### Changed
+- set remote_invocable? false for local dispatch
 
 ## [0.5.0] - 2026-03-26
 
