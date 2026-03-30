@@ -4,7 +4,7 @@ module Legion
   module Extensions
     module Knowledge
       module Runners
-        module Monitor
+        module Monitor # rubocop:disable Legion/Extension/RunnerIncludeHelpers
           module_function
 
           DEFAULT_EXTENSIONS = %w[.md .txt].freeze
@@ -18,7 +18,7 @@ module Legion
             end
 
             monitors
-          rescue StandardError
+          rescue StandardError => _e
             []
           end
 
@@ -70,7 +70,7 @@ module Legion
             monitors.each do |m|
               scan = Helpers::Manifest.scan(path: m[:path], extensions: m[:extensions])
               total_files += scan.size
-            rescue StandardError
+            rescue StandardError => _e
               next
             end
 
@@ -85,7 +85,7 @@ module Legion
             return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
 
             Legion::Settings.dig(:knowledge, :monitors)
-          rescue StandardError
+          rescue StandardError => _e
             nil
           end
           private_class_method :read_monitors_setting
@@ -94,7 +94,7 @@ module Legion
             return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
 
             Legion::Settings.dig(:knowledge, :corpus_path)
-          rescue StandardError
+          rescue StandardError => _e
             nil
           end
           private_class_method :read_legacy_corpus_path
@@ -107,7 +107,7 @@ module Legion
             knowledge[:monitors] = monitors
             loader.settings[:knowledge] = knowledge
             true
-          rescue StandardError
+          rescue StandardError => _e
             false
           end
           private_class_method :persist_monitors

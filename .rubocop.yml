@@ -1,44 +1,9 @@
-AllCops:
-  TargetRubyVersion: 3.4
-  NewCops: enable
-  SuggestExtensions: false
+inherit_gem:
+  rubocop-legion: config/lex.yml
 
-Layout/LineLength:
-  Max: 160
-
-Metrics/MethodLength:
-  Max: 30
-
-Metrics/AbcSize:
-  Max: 60
-
-Metrics/ClassLength:
-  Max: 300
-
-Metrics/ModuleLength:
-  Max: 500
-
-Metrics/CyclomaticComplexity:
-  Max: 12
-
-Metrics/PerceivedComplexity:
-  Max: 12
-
-Metrics/ParameterLists:
-  Max: 7
-
-Metrics/BlockLength:
-  Exclude:
-    - 'spec/**/*'
-
-Layout/HashAlignment:
-  EnforcedColonStyle: table
-  EnforcedHashRocketStyle: table
-
-Naming/PredicateMethod:
-  Enabled: false
-
-Style/Documentation:
+# Systematic false positives: private helpers in runners return nil/bool guards,
+# not all methods in a runner module are public runner methods.
+Legion/Extension/RunnerReturnHash:
   Enabled: false
 
 Lint/EmptyClass:

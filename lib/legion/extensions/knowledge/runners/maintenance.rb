@@ -4,7 +4,7 @@ module Legion
   module Extensions
     module Knowledge
       module Runners
-        module Maintenance
+        module Maintenance # rubocop:disable Legion/Extension/RunnerIncludeHelpers
           module_function
 
           def detect_orphans(path:)
@@ -99,7 +99,7 @@ module Legion
 
             rows = base.select(:confidence, :status, :access_count, :embedding, :created_at).all
             apollo_stats_from_rows(base, rows, total)
-          rescue StandardError
+          rescue StandardError => _e
             apollo_defaults
           end
           private_class_method :build_apollo_stats
@@ -155,7 +155,7 @@ module Legion
 
           def load_manifest_files(path)
             manifest = Helpers::ManifestStore.load(corpus_path: path)
-            manifest.map { |e| e[:path] }.compact.uniq
+            manifest.filter_map { |e| e[:path] }.uniq
           end
           private_class_method :load_manifest_files
 
@@ -168,7 +168,7 @@ module Legion
               .select_map(Sequel.lit("source_context->>'source_file'"))
               .compact
               .uniq
-          rescue StandardError
+          rescue StandardError => _e
             []
           end
           private_class_method :load_apollo_source_files
@@ -180,7 +180,7 @@ module Legion
               .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
               .exclude(status: 'archived')
               .count
-          rescue StandardError
+          rescue StandardError => _e
             0
           end
           private_class_method :count_apollo_chunks
@@ -208,7 +208,7 @@ module Legion
               .select_map([:id, :access_count, :confidence,
                            Sequel.lit("source_context->>'source_file' AS source_file")])
               .map { |r| { id: r[0], access_count: r[1], confidence: r[2], source_file: r[3] } }
-          rescue StandardError
+          rescue StandardError => _e
             []
           end
           private_class_method :hot_chunks
@@ -229,7 +229,7 @@ module Legion
               .select_map([:id, :confidence, :created_at,
                            Sequel.lit("source_context->>'source_file' AS source_file")])
               .map { |r| { id: r[0], confidence: r[1], created_at: r[2]&.iso8601, source_file: r[3] } }
-          rescue StandardError
+          rescue StandardError => _e
             []
           end
           private_class_method :cold_chunks
@@ -248,7 +248,7 @@ module Legion
               .select_map([:id, :confidence, :access_count,
                            Sequel.lit("source_context->>'source_file' AS source_file")])
               .map { |r| { id: r[0], confidence: r[1], access_count: r[2], source_file: r[3] } }
-          rescue StandardError
+          rescue StandardError => _e
             []
           end
           private_class_method :low_confidence_chunks
@@ -268,7 +268,7 @@ module Legion
               chunks_never_accessed:  base.where(access_count: 0).count,
               chunks_below_threshold: base.where { confidence < settings_stale_threshold }.count
             }
-          rescue StandardError
+          rescue StandardError => _e
             defaults
           end
           private_class_method :quality_summary
@@ -277,7 +277,7 @@ module Legion
             return 0 unless defined?(Legion::Data::Model::ApolloAccessLog)
 
             Legion::Data::Model::ApolloAccessLog.where(action: 'knowledge_query').count
-          rescue StandardError
+          rescue StandardError => _e
             0
           end
           private_class_method :query_count
@@ -286,7 +286,7 @@ module Legion
             return 0.3 unless defined?(Legion::Settings)
 
             Legion::Settings.dig(:knowledge, :maintenance, :stale_threshold) || 0.3
-          rescue StandardError
+          rescue StandardError => _e
             0.3
           end
           private_class_method :settings_stale_threshold
@@ -295,7 +295,7 @@ module Legion
             return 7 unless defined?(Legion::Settings)
 
             Legion::Settings.dig(:knowledge, :maintenance, :cold_chunk_days) || 7
-          rescue StandardError
+          rescue StandardError => _e
             7
           end
           private_class_method :settings_cold_chunk_days
@@ -304,7 +304,7 @@ module Legion
             return 10 unless defined?(Legion::Settings)
 
             Legion::Settings.dig(:knowledge, :maintenance, :quality_report_limit) || 10
-          rescue StandardError
+          rescue StandardError => _e
             10
           end
           private_class_method :settings_quality_limit

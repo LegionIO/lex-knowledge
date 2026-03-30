@@ -6,7 +6,7 @@ module Legion
   module Extensions
     module Knowledge
       module Runners
-        module Query
+        module Query # rubocop:disable Legion/Extension/RunnerIncludeHelpers
           module_function
 
           def query(question:, top_k: nil, synthesize: true)
@@ -74,7 +74,7 @@ module Legion
               limit: top_k,
               tags:  ['document_chunk']
             )
-          rescue StandardError
+          rescue StandardError => _e
             []
           end
           private_class_method :retrieve_chunks
@@ -90,7 +90,7 @@ module Legion
                          "Context:\n#{context_text}\n\nQuestion: #{question}\n\nAnswer:"
                      end
 
-            result = Legion::LLM.chat(message: prompt, caller: { extension: 'lex-knowledge' })
+            result = llm_chat(message: prompt, caller: { extension: 'lex-knowledge' })
             result.is_a?(Hash) ? result[:content] : result
           rescue StandardError => e
             "Error generating answer: #{e.message}"
@@ -159,7 +159,7 @@ module Legion
                                   synthesized:     synthesized,
                                   rating:          rating
                                 })
-          rescue StandardError
+          rescue StandardError => _e
             nil
           end
           private_class_method :emit_feedback_event
@@ -173,7 +173,7 @@ module Legion
             return nil unless defined?(Legion::Settings)
 
             Legion::Settings.dig(:knowledge, :query, :top_k)
-          rescue StandardError
+          rescue StandardError => _e
             nil
           end
           private_class_method :settings_top_k

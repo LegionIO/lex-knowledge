@@ -4,7 +4,7 @@ module Legion
   module Extensions
     module Knowledge
       module Actor
-        class MaintenanceRunner < Legion::Extensions::Actors::Every
+        class MaintenanceRunner < Legion::Extensions::Actors::Every # rubocop:disable Legion/Extension/EveryActorRequiresTime
           def runner_class    = 'Legion::Extensions::Knowledge::Runners::Maintenance'
           def runner_function = 'health'
           def check_subtask?  = false
@@ -21,7 +21,7 @@ module Legion
             21_600
           end
 
-          def enabled?
+          def enabled? # rubocop:disable Legion/Extension/ActorEnabledSideEffects
             return false unless corpus_path && !corpus_path.empty?
 
             true
