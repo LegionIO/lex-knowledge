@@ -12,17 +12,17 @@ require_relative 'knowledge/runners/maintenance'
 require_relative 'knowledge/runners/monitor'
 require_relative 'knowledge/client'
 
-if defined?(Legion::Transport)
+if Legion.const_defined?(:Transport, false)
   require_relative 'knowledge/transport/exchanges/knowledge'
   require_relative 'knowledge/transport/queues/ingest'
   require_relative 'knowledge/transport/messages/ingest_message'
   require_relative 'knowledge/transport/messages/monitor_reload'
 end
 
-require_relative 'knowledge/actors/corpus_watcher' if defined?(Legion::Extensions::Actors::Every)
-require_relative 'knowledge/actors/maintenance_runner' if defined?(Legion::Extensions::Actors::Every)
+require_relative 'knowledge/actors/corpus_watcher'
+require_relative 'knowledge/actors/maintenance_runner'
 
-require_relative 'knowledge/actors/corpus_ingest' if defined?(Legion::Extensions::Actors::Subscription)
+require_relative 'knowledge/actors/corpus_ingest'
 
 module Legion
   module Extensions

@@ -10,10 +10,10 @@ module Legion
           def check_subtask?  = false
           def generate_task?  = false
 
-          def enabled?
-            defined?(Legion::Transport) &&
+          def enabled? # rubocop:disable Legion/Extension/ActorEnabledSideEffects
+            Legion.const_defined?(:Transport, false) &&
               defined?(Legion::Extensions::Knowledge::Runners::Ingest)
-          rescue StandardError
+          rescue StandardError => _e
             false
           end
         end

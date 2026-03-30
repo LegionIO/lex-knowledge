@@ -20,7 +20,7 @@ module Legion
 
             raw = ::File.read(path, encoding: 'utf-8')
             ::JSON.parse(raw, symbolize_names: true)
-          rescue StandardError
+          rescue StandardError => _e
             []
           end
 
@@ -31,7 +31,7 @@ module Legion
             ::File.write(tmp, ::JSON.generate(manifest.map { |e| serialize_entry(e) }))
             ::File.rename(tmp, path)
             true
-          rescue StandardError
+          rescue StandardError => _e
             false
           end
 

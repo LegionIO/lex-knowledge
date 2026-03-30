@@ -4,7 +4,7 @@ module Legion
   module Extensions
     module Knowledge
       module Runners
-        module Corpus
+        module Corpus # rubocop:disable Legion/Extension/RunnerIncludeHelpers
           module_function
 
           def manifest_path(path:)

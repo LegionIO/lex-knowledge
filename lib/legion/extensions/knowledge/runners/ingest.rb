@@ -6,7 +6,7 @@ module Legion
   module Extensions
     module Knowledge
       module Runners
-        module Ingest
+        module Ingest # rubocop:disable Legion/Extension/RunnerIncludeHelpers
           module_function
 
           def log
@@ -196,7 +196,7 @@ module Legion
           private_class_method :paired_without_embed
 
           def build_embed_map(needs_embed)
-            results = Legion::LLM.embed_batch(needs_embed.map { |c| c[:content] })
+            results = Legion::LLM.embed_batch(needs_embed.map { |c| c[:content] }) # rubocop:disable Legion/HelperMigration/DirectLlm
             results.each_with_object({}) do |r, h|
               h[needs_embed[r[:index]][:content_hash]] = r[:vector] unless r[:error]
             end
@@ -258,7 +258,7 @@ module Legion
             return unless defined?(Legion::Apollo)
             return unless Legion::Apollo.respond_to?(:ingest) && Legion::Apollo.started?
 
-            Legion::Apollo.ingest(
+            Legion::Apollo.ingest( # rubocop:disable Legion/HelperMigration/DirectKnowledge
               content:      file_path,
               content_type: 'document_retired',
               tags:         [file_path, 'retired', 'document_chunk'].uniq,

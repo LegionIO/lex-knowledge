@@ -4,7 +4,7 @@ module Legion
   module Extensions
     module Knowledge
       module Actor
-        class CorpusWatcher < Legion::Extensions::Actors::Every
+        class CorpusWatcher < Legion::Extensions::Actors::Every # rubocop:disable Legion/Extension/EveryActorRequiresTime
           def runner_class    = 'Legion::Extensions::Knowledge::Runners::Ingest'
           def runner_function = 'ingest_corpus'
           def check_subtask?  = false
@@ -21,7 +21,7 @@ module Legion
             300
           end
 
-          def enabled?
+          def enabled? # rubocop:disable Legion/Extension/ActorEnabledSideEffects
             resolve_monitors.any?
           rescue StandardError => e
             log.warn(e.message)

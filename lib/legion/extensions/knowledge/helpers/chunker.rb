@@ -79,7 +79,7 @@ module Legion
             return nil unless defined?(Legion::Settings)
 
             Legion::Settings.dig(:knowledge, :chunker, :max_tokens)
-          rescue StandardError
+          rescue StandardError => _e
             nil
           end
           private_class_method :settings_max_tokens
@@ -88,7 +88,7 @@ module Legion
             return nil unless defined?(Legion::Settings)
 
             Legion::Settings.dig(:knowledge, :chunker, :overlap_tokens)
-          rescue StandardError
+          rescue StandardError => _e
             nil
           end
           private_class_method :settings_overlap_tokens
