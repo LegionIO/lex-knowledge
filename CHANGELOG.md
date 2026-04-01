@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.6] - 2026-03-31
+
+### Fixed
+- `chunk_exists?` queries by `content_hash` column directly instead of LIKE on `text[]` tags column
+
 ## [0.6.5] - 2026-03-31
 
 ### Fixed
