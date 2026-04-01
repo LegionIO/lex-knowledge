@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.5] - 2026-03-31
+
+### Fixed
+- `chunk_exists?` uses cross-DB `Sequel.like` instead of PostgreSQL-only `pg_array_op`
+
 ## [0.6.4] - 2026-03-30
 
 ### Changed

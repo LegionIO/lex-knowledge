@@ -223,7 +223,7 @@ module Legion
             return false unless defined?(Legion::Data::Model::ApolloEntry)
 
             Legion::Data::Model::ApolloEntry
-              .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
+              .where(Sequel.like(:tags, '%document_chunk%'))
               .where(Sequel.like(:content, "%#{content_hash}%"))
               .any?
           rescue StandardError => e
