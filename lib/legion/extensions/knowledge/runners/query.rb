@@ -69,11 +69,12 @@ module Legion
           def retrieve_chunks(question, top_k)
             return [] unless defined?(Legion::Extensions::Apollo)
 
-            Legion::Extensions::Apollo::Runners::Knowledge.retrieve_relevant(
+            result = Legion::Extensions::Apollo::Runners::Knowledge.retrieve_relevant(
               query: question,
               limit: top_k,
               tags:  ['document_chunk']
             )
+            result.is_a?(Hash) && result[:success] ? Array(result[:entries]) : []
           rescue StandardError => _e
             []
           end

@@ -265,6 +265,36 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Maintenance do
     end
   end
 
+  describe '.health with nil path' do
+    it 'returns success: false when path is nil and no settings corpus_path' do
+      result = described_class.health(path: nil)
+      expect(result[:success]).to be false
+      expect(result[:error]).to eq('corpus_path is required')
+    end
+
+    it 'uses settings corpus_path when path is nil and settings are present' do
+      stub_const('Legion::Settings', Module.new do
+        def self.dig(*keys)
+          { knowledge: { corpus_path: nil } }.dig(*keys)
+        end
+      end)
+      result = described_class.health(path: nil)
+      expect(result[:success]).to be false
+      expect(result[:error]).to eq('corpus_path is required')
+    end
+
+    it 'falls back to settings corpus_path when set' do
+      stub_const('Legion::Settings', Module.new do
+        def self.dig(*_keys)
+          Dir.pwd
+        end
+      end)
+      result = described_class.health(path: nil)
+      expect(result[:success]).to be true
+      expect(result).to include(:local, :apollo, :sync)
+    end
+  end
+
   describe '.quality_report' do
     it 'returns all report sections' do
       result = described_class.quality_report

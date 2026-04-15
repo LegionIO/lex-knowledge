@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.7] - 2026-04-15
+
+### Fixed
+- `Runners::Query.retrieve_chunks` now extracts the `entries` array from `retrieve_relevant`'s Hash response instead of returning the Hash directly, preventing `TypeError: no implicit conversion of Symbol into Integer` on `knowledge query`
+- `Runners::Maintenance.health` now returns `{ success: false, error: 'corpus_path is required' }` when called with `path: nil` and no settings fallback, instead of raising `TypeError: no implicit conversion of nil into String`; falls back to `Legion::Settings.dig(:knowledge, :corpus_path)` when available
+
 ## [0.6.6] - 2026-03-31
 
 ### Fixed

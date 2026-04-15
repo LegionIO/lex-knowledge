@@ -46,6 +46,40 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Query do
     end
   end
 
+  describe '.retrieve_chunks (via .query)' do
+    context 'when retrieve_relevant returns a Hash (not an Array)' do
+      before do
+        stub_const('Legion::Extensions::Apollo', Module.new)
+        runners_mod = Module.new
+        knowledge_mod = Module.new
+        knowledge_mod.define_singleton_method(:retrieve_relevant) do |**|
+          { success: true, entries: [
+            { id: 1, content: 'chunk text', content_type: 'document_chunk',
+              confidence: 0.8, distance: 0.2, tags: [], source_agent: 'test',
+              knowledge_domain: 'general' }
+          ], count: 1 }
+        end
+        runners_mod.const_set(:Knowledge, knowledge_mod)
+        stub_const('Legion::Extensions::Apollo::Runners', runners_mod)
+      end
+
+      it 'returns success without TypeError on query' do
+        result = described_class.query(question: 'legion', synthesize: false)
+        expect(result[:success]).to be true
+      end
+
+      it 'extracts entries array from retrieve_relevant Hash response' do
+        result = described_class.query(question: 'legion', synthesize: false)
+        expect(result[:sources]).to be_an(Array)
+        expect(result[:sources].size).to eq(1)
+      end
+
+      it 'does not raise no implicit conversion of Symbol into Integer' do
+        expect { described_class.query(question: 'legion', synthesize: false) }.not_to raise_error
+      end
+    end
+  end
+
   describe '.record_feedback' do
     it 'returns success with question_hash' do
       result = described_class.record_feedback(
