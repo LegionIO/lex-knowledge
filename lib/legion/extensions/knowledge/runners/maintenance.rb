@@ -47,16 +47,19 @@ module Legion
           end
 
           def health(path:)
-            scan_entries  = Helpers::Manifest.scan(path: path)
-            store_path    = Helpers::ManifestStore.store_path(corpus_path: path)
+            resolved = path || (Legion::Settings.dig(:knowledge, :corpus_path) if defined?(Legion::Settings))
+            return { success: false, error: 'corpus_path is required' } if resolved.nil? || resolved.to_s.empty?
+
+            scan_entries  = Helpers::Manifest.scan(path: resolved)
+            store_path    = Helpers::ManifestStore.store_path(corpus_path: resolved)
             manifest_file = ::File.exist?(store_path)
             last_ingest   = manifest_file ? ::File.mtime(store_path).iso8601 : nil
 
             {
               success: true,
-              local:   build_local_stats(path, scan_entries, manifest_file, last_ingest),
+              local:   build_local_stats(resolved, scan_entries, manifest_file, last_ingest),
               apollo:  build_apollo_stats,
-              sync:    build_sync_stats(path, scan_entries)
+              sync:    build_sync_stats(resolved, scan_entries)
             }
           rescue StandardError => e
             { success: false, error: e.message }
