@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.8] - 2026-04-24
+
+### Fixed
+- Chunker `content_hash` now uses MD5 + whitespace normalization (matching `Legion::Extensions::Apollo::Helpers::Writeback.content_hash`) instead of raw SHA-256. Previously, 64-char SHA-256 hashes were rejected by Postgres when writing to `apollo_entries.content_hash` (CHARACTER(32)), and the failure was silently swallowed inside `handle_ingest`. As a result, corpus ingests via `/api/knowledge/ingest` appeared to succeed but persisted nothing. Chunks now round-trip into `apollo_entries` and are retrievable via `/api/apollo/query`.
+- `upsert_chunk_with_embedding` now propagates `{success: false, error: ...}` returns from `handle_ingest` as `:skipped` with a warn log, instead of masking them as false-positive `:created`/`:updated`.
+
 ## [0.6.7] - 2026-04-15
 
 ### Fixed
