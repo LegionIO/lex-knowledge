@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.9] - 2026-04-27
+
+### Fixed
+- `Manifest.scan` no longer crashes on `Errno::EPERM`/`EACCES` encountered during corpus walk (common on macOS for TCC-protected paths like `~/Library/Accounts`). Unreadable subdirs are pruned with a debug log; scan continues. Replaced `Find.find` with a recursive walker that rescues per-dir; also tolerates `Errno::ELOOP` and `Errno::ENOENT` for files that disappear mid-scan.
+
+> **Version note**: `0.6.8` is reserved for the companion `fix/content-hash-md5-match-apollo-schema` PR (chunker SHA-256 → MD5 hash fix). Both branches target `0.6.7` as their merge base; this PR claims `0.6.9` to avoid intra-batch collision.
+
 ## [0.6.7] - 2026-04-15
 
 ### Fixed

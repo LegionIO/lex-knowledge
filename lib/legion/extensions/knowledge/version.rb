@@ -3,7 +3,7 @@
 module Legion
   module Extensions
     module Knowledge
-      VERSION = '0.6.7'
+      VERSION = '0.6.9'
     end
   end
 end
