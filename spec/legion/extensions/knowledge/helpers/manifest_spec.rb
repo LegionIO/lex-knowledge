@@ -61,6 +61,119 @@ RSpec.describe Legion::Extensions::Knowledge::Helpers::Manifest do
         expect(result.first[:path]).to include('nested.md')
       end
     end
+
+    it 'treats extension filter as case-insensitive' do
+      Dir.mktmpdir do |dir|
+        File.write(File.join(dir, 'UPPER.MD'), '# upper')
+        File.write(File.join(dir, 'mixed.TxT'), 'mixed')
+        result = manifest.scan(path: dir)
+        basenames = result.map { |e| File.basename(e[:path]) }
+        expect(basenames).to contain_exactly('UPPER.MD', 'mixed.TxT')
+      end
+    end
+
+    it 'skips dot-directories and does not recurse into them' do
+      Dir.mktmpdir do |dir|
+        hidden = File.join(dir, '.hidden_dir')
+        FileUtils.mkdir_p(hidden)
+        File.write(File.join(hidden, 'inside.md'), 'secret')
+        File.write(File.join(dir, 'visible.md'), 'visible')
+        result = manifest.scan(path: dir)
+        paths = result.map { |e| e[:path] }
+        expect(paths).not_to include(a_string_matching(%r{/\.hidden_dir/}))
+        expect(paths.map { |p| File.basename(p) }).to eq(['visible.md'])
+      end
+    end
+
+    it 'skips unreadable directories and continues scanning siblings' do
+      Dir.mktmpdir do |tmp|
+        readable = File.join(tmp, 'readable')
+        locked   = File.join(tmp, 'locked')
+        FileUtils.mkdir_p(readable)
+        FileUtils.mkdir_p(locked)
+        File.write(File.join(readable, 'a.md'), 'hello')
+        File.write(File.join(locked,   'b.md'), 'nope')
+
+        allow(Dir).to receive(:children).and_call_original
+        allow(Dir).to receive(:children).with(locked).and_raise(Errno::EPERM)
+
+        results = manifest.scan(path: tmp)
+        paths   = results.map { |r| r[:path] }
+        expect(paths).to include(end_with('/readable/a.md'))
+        expect(paths).not_to include(end_with('/locked/b.md'))
+      end
+    end
+
+    it 'skips unreadable directories raising Errno::EACCES' do
+      Dir.mktmpdir do |tmp|
+        readable = File.join(tmp, 'readable')
+        locked   = File.join(tmp, 'locked')
+        FileUtils.mkdir_p(readable)
+        FileUtils.mkdir_p(locked)
+        File.write(File.join(readable, 'a.md'), 'hello')
+
+        allow(Dir).to receive(:children).and_call_original
+        allow(Dir).to receive(:children).with(locked).and_raise(Errno::EACCES)
+
+        results = manifest.scan(path: tmp)
+        expect(results.map { |r| File.basename(r[:path]) }).to eq(['a.md'])
+      end
+    end
+
+    it 'skips multiple unreadable subdirs at different depths without failing' do
+      Dir.mktmpdir do |tmp|
+        # tmp/
+        #   top.md              <- readable
+        #   locked1/            <- EPERM
+        #   ok/
+        #     mid.md            <- readable
+        #     locked2/          <- EACCES
+        File.write(File.join(tmp, 'top.md'), 'top')
+
+        locked1 = File.join(tmp, 'locked1')
+        FileUtils.mkdir_p(locked1)
+
+        ok = File.join(tmp, 'ok')
+        FileUtils.mkdir_p(ok)
+        File.write(File.join(ok, 'mid.md'), 'mid')
+
+        locked2 = File.join(ok, 'locked2')
+        FileUtils.mkdir_p(locked2)
+
+        allow(Dir).to receive(:children).and_call_original
+        allow(Dir).to receive(:children).with(locked1).and_raise(Errno::EPERM)
+        allow(Dir).to receive(:children).with(locked2).and_raise(Errno::EACCES)
+
+        results = manifest.scan(path: tmp)
+        basenames = results.map { |r| File.basename(r[:path]) }.sort
+        expect(basenames).to eq(%w[mid.md top.md])
+      end
+    end
+
+    it 'skips files that disappear between listing and read (ENOENT)' do
+      Dir.mktmpdir do |tmp|
+        good = File.join(tmp, 'good.md')
+        gone = File.join(tmp, 'gone.md')
+        File.write(good, 'keep me')
+        File.write(gone, 'disappear')
+
+        allow(File).to receive(:size).and_call_original
+        allow(File).to receive(:size).with(gone).and_raise(Errno::ENOENT)
+
+        results = manifest.scan(path: tmp)
+        expect(results.map { |r| File.basename(r[:path]) }).to eq(['good.md'])
+      end
+    end
+
+    it 'does not crash when the scan root itself is unreadable' do
+      Dir.mktmpdir do |tmp|
+        allow(File).to receive(:directory?).and_call_original
+        allow(File).to receive(:directory?).with(tmp).and_raise(Errno::EPERM)
+
+        expect { manifest.scan(path: tmp) }.not_to raise_error
+        expect(manifest.scan(path: tmp)).to eq([])
+      end
+    end
   end
 
   describe '.diff' do
