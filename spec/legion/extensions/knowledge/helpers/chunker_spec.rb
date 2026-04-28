@@ -35,8 +35,8 @@ RSpec.describe Legion::Extensions::Knowledge::Helpers::Chunker do
     end
 
     it 'computes a 32-char (MD5-length) content_hash for each chunk' do
-      # Must be MD5 length to fit apollo_entries.content_hash CHARACTER(32).
-      # Raw SHA-256 (64 chars) is silently rejected by Postgres.
+      # Keep chunk hashes aligned with Apollo Writeback and compatible with
+      # older apollo_entries.content_hash columns fixed at MD5 length.
       result = chunker.chunk(sections: [section])
       result.each do |chunk|
         expect(chunk[:content_hash]).to match(/\A[0-9a-f]{32}\z/)

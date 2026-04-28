@@ -62,10 +62,9 @@ module Legion
           end
           private_class_method :split_section
 
-          # Hash must match Legion::Extensions::Apollo::Helpers::Writeback.content_hash so
-          # chunks land in apollo_entries.content_hash (CHARACTER(32) — MD5 length) without
-          # PG::StringDataRightTruncation. A bare SHA-256 (64 chars) silently fails the INSERT
-          # and the chain of rescues returns the chunk as "persisted" without actually writing.
+          # Hash must match Legion::Extensions::Apollo::Helpers::Writeback.content_hash
+          # so knowledge chunks deduplicate consistently with Apollo writeback and still
+          # fit older apollo_entries.content_hash columns fixed at MD5 length.
           def build_chunk(section, content, index)
             {
               content:      content,
@@ -83,7 +82,7 @@ module Legion
             if defined?(Legion::Extensions::Apollo::Helpers::Writeback)
               Legion::Extensions::Apollo::Helpers::Writeback.content_hash(content)
             else
-              # Fallback when apollo isn't loaded — match its MD5+normalize semantics
+              # Fallback when apollo isn't loaded - match its MD5+normalize semantics
               # so future apollo-backed lookups still work.
               normalized = content.to_s.strip.downcase.gsub(/\s+/, ' ')
               ::Digest::MD5.hexdigest(normalized)
