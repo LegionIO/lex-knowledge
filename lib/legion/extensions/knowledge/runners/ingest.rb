@@ -214,14 +214,15 @@ module Legion
             result = ingest_to_apollo(chunk, embedding)
             # handle_ingest returns a Hash on both success and failure paths; the upsert
             # status must reflect the actual persistence outcome, not just the `force` flag.
-            # Previously any {success: false, error: ...} return was ignored, producing
+            # Previously any non-raising return was treated as success, producing
             # false-positive :created/:updated responses to callers.
-            if result.is_a?(Hash) && result[:success] == false
+            unless result.is_a?(Hash) && result[:success] == true
               hash_prefix = chunk[:content_hash]&.slice(0, 12)
               content_len = chunk[:content]&.length
+              error = result.is_a?(Hash) ? result[:error].inspect : "non-hash result class=#{result.class}"
               log.warn(
-                '[knowledge][upsert_chunk] apollo persistence failed ' \
-                "error=#{result[:error].inspect} chunk_hash=#{hash_prefix} chunk_len=#{content_len}"
+                '[knowledge][upsert_chunk] apollo persistence not confirmed ' \
+                "error=#{error} chunk_hash=#{hash_prefix} chunk_len=#{content_len}"
               )
               return :skipped
             end

@@ -218,15 +218,23 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
       it 'returns :skipped and emits a warn log when handle_ingest returns success: false' do
         allow(described_class).to receive(:ingest_to_apollo)
           .and_return({ success: false, error: 'PG::StringDataRightTruncation' })
-        expect(Legion::Logging).to receive(:warn).with(/apollo persistence failed/)
+        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
 
-      it 'still returns :created when handle_ingest returns a non-Hash result' do
+      it 'returns :skipped when handle_ingest returns a non-Hash result' do
         allow(described_class).to receive(:ingest_to_apollo).and_return(nil)
+        expect(Legion::Logging).to receive(:warn).with(/non-hash result class=NilClass/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
-        expect(outcome).to eq(:created)
+        expect(outcome).to eq(:skipped)
+      end
+
+      it 'returns :skipped when handle_ingest returns a hash without success' do
+        allow(described_class).to receive(:ingest_to_apollo).and_return({ entry_id: 42 })
+        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
+        expect(outcome).to eq(:skipped)
       end
 
       it 'returns :skipped and logs when ingest_to_apollo raises' do

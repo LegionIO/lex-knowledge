@@ -1,10 +1,15 @@
 # Changelog
 
-## [0.6.8] - 2026-04-24
+## [0.6.10] - 2026-04-28
 
 ### Fixed
 - Chunker `content_hash` now uses MD5 + whitespace normalization (matching `Legion::Extensions::Apollo::Helpers::Writeback.content_hash`) instead of raw SHA-256. Previously, 64-char SHA-256 hashes were rejected by Postgres when writing to `apollo_entries.content_hash` (CHARACTER(32)), and the failure was silently swallowed inside `handle_ingest`. As a result, corpus ingests via `/api/knowledge/ingest` appeared to succeed but persisted nothing. Chunks now round-trip into `apollo_entries` and are retrievable via `/api/apollo/query`.
-- `upsert_chunk_with_embedding` now propagates `{success: false, error: ...}` returns from `handle_ingest` as `:skipped` with a warn log, instead of masking them as false-positive `:created`/`:updated`.
+- `upsert_chunk_with_embedding` now requires an explicit `{success: true}` from `handle_ingest` before reporting `:created`/`:updated`. Failure hashes, missing success keys, and non-Hash returns are reported as `:skipped` with a warn log instead of false-positive success counts.
+
+## [0.6.9] - 2026-04-27
+
+### Fixed
+- `Manifest.scan` no longer crashes on `Errno::EPERM`/`EACCES` encountered during corpus walk (common on macOS for TCC-protected paths like `~/Library/Accounts`). Unreadable subdirs are pruned with a debug log; scan continues. Replaced `Find.find` with a recursive walker that rescues per-dir; also tolerates `Errno::ELOOP` and `Errno::ENOENT` for files that disappear mid-scan.
 
 ## [0.6.7] - 2026-04-15
 
