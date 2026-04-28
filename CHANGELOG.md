@@ -1,11 +1,15 @@
 # Changelog
 
+## [0.6.10] - 2026-04-28
+
+### Fixed
+- Chunker `content_hash` now uses MD5 + whitespace normalization (matching `Legion::Extensions::Apollo::Helpers::Writeback.content_hash`) instead of raw SHA-256. This keeps knowledge chunk deduplication aligned with Apollo writeback and avoids insert truncation on deployments whose `apollo_entries.content_hash` column is still fixed at 32 characters.
+- `upsert_chunk_with_embedding` now requires an explicit `{success: true}` from `handle_ingest` before reporting `:created`/`:updated`. Failure hashes, missing success keys, and non-Hash returns are reported as `:skipped` with a warn log instead of false-positive success counts.
+
 ## [0.6.9] - 2026-04-27
 
 ### Fixed
 - `Manifest.scan` no longer crashes on `Errno::EPERM`/`EACCES` encountered during corpus walk (common on macOS for TCC-protected paths like `~/Library/Accounts`). Unreadable subdirs are pruned with a debug log; scan continues. Replaced `Find.find` with a recursive walker that rescues per-dir; also tolerates `Errno::ELOOP` and `Errno::ENOENT` for files that disappear mid-scan.
-
-> **Version note**: `0.6.8` is reserved for the companion `fix/content-hash-md5-match-apollo-schema` PR (chunker SHA-256 → MD5 hash fix). Both branches target `0.6.7` as their merge base; this PR claims `0.6.9` to avoid intra-batch collision.
 
 ## [0.6.7] - 2026-04-15
 

@@ -62,6 +62,9 @@ module Legion
           end
           private_class_method :split_section
 
+          # Hash must match Legion::Extensions::Apollo::Helpers::Writeback.content_hash
+          # so knowledge chunks deduplicate consistently with Apollo writeback and still
+          # fit older apollo_entries.content_hash columns fixed at MD5 length.
           def build_chunk(section, content, index)
             {
               content:      content,
@@ -70,10 +73,22 @@ module Legion
               source_file:  section[:source_file],
               token_count:  (content.length.to_f / CHARS_PER_TOKEN).ceil,
               chunk_index:  index,
-              content_hash: ::Digest::SHA256.hexdigest(content)
+              content_hash: apollo_compatible_content_hash(content)
             }
           end
           private_class_method :build_chunk
+
+          def apollo_compatible_content_hash(content)
+            if defined?(Legion::Extensions::Apollo::Helpers::Writeback)
+              Legion::Extensions::Apollo::Helpers::Writeback.content_hash(content)
+            else
+              # Fallback when apollo isn't loaded - match its MD5+normalize semantics
+              # so future apollo-backed lookups still work.
+              normalized = content.to_s.strip.downcase.gsub(/\s+/, ' ')
+              ::Digest::MD5.hexdigest(normalized)
+            end
+          end
+          private_class_method :apollo_compatible_content_hash
 
           def settings_max_tokens
             return nil unless defined?(Legion::Settings)

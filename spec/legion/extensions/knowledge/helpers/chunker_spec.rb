@@ -34,11 +34,35 @@ RSpec.describe Legion::Extensions::Knowledge::Helpers::Chunker do
       expect(result.first[:source_file]).to eq('/docs/guide.md')
     end
 
-    it 'computes a sha256 content_hash for each chunk' do
+    it 'computes a 32-char (MD5-length) content_hash for each chunk' do
+      # Keep chunk hashes aligned with Apollo Writeback and compatible with
+      # older apollo_entries.content_hash columns fixed at MD5 length.
       result = chunker.chunk(sections: [section])
       result.each do |chunk|
-        expect(chunk[:content_hash]).to match(/\A[0-9a-f]{64}\z/)
+        expect(chunk[:content_hash]).to match(/\A[0-9a-f]{32}\z/)
       end
+    end
+
+    it 'content_hash matches MD5 of whitespace-normalized content' do
+      # Mirrors Apollo::Helpers::Writeback.content_hash semantics: strip, downcase,
+      # collapse whitespace, then MD5. This keeps dedup consistent with apollo.
+      result = chunker.chunk(sections: [section])
+      result.each do |chunk|
+        normalized = chunk[:content].to_s.strip.downcase.gsub(/\s+/, ' ')
+        expect(chunk[:content_hash]).to eq(Digest::MD5.hexdigest(normalized))
+      end
+    end
+
+    it 'delegates to Apollo::Helpers::Writeback.content_hash when defined' do
+      writeback = Module.new do
+        def self.content_hash(content)
+          "apollo-#{Digest::MD5.hexdigest(content.to_s)}"[0, 32]
+        end
+      end
+      stub_const('Legion::Extensions::Apollo::Helpers::Writeback', writeback)
+      result = chunker.chunk(sections: [section])
+      expected = writeback.content_hash(result.first[:content])
+      expect(result.first[:content_hash]).to eq(expected)
     end
 
     it 'assigns sequential chunk_index values starting at 0' do

@@ -163,6 +163,89 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
     end
   end
 
+  describe '.upsert_chunk_with_embedding — persistence outcome propagation' do
+    let(:chunk) do
+      {
+        content:      'Chunk contents for persistence test.',
+        content_hash: 'abcdef0123456789abcdef0123456789',
+        source_file:  '/tmp/test.md',
+        heading:      'H1',
+        section_path: ['H1'],
+        chunk_index:  0,
+        token_count:  9
+      }
+    end
+    let(:embedding) { [0.1, 0.2, 0.3] }
+
+    context 'when dry_run: true' do
+      it 'returns :created without contacting apollo' do
+        expect(described_class).not_to receive(:ingest_to_apollo)
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding, dry_run: true)
+        expect(outcome).to eq(:created)
+      end
+    end
+
+    context 'when Legion::Extensions::Apollo is not defined' do
+      before { hide_const('Legion::Extensions::Apollo') if defined?(Legion::Extensions::Apollo) }
+
+      it 'returns :created' do
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
+        expect(outcome).to eq(:created)
+      end
+    end
+
+    context 'when apollo is defined' do
+      before { stub_const('Legion::Extensions::Apollo', Module.new) }
+
+      it 'returns :skipped when exists is true and force is false' do
+        expect(described_class).not_to receive(:ingest_to_apollo)
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding, exists: true)
+        expect(outcome).to eq(:skipped)
+      end
+
+      it 'returns :created when handle_ingest returns a success hash' do
+        allow(described_class).to receive(:ingest_to_apollo).and_return({ success: true, entry_id: 42 })
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
+        expect(outcome).to eq(:created)
+      end
+
+      it 'returns :updated when force: true and handle_ingest succeeds' do
+        allow(described_class).to receive(:ingest_to_apollo).and_return({ success: true, entry_id: 42 })
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding, force: true, exists: true)
+        expect(outcome).to eq(:updated)
+      end
+
+      it 'returns :skipped and emits a warn log when handle_ingest returns success: false' do
+        allow(described_class).to receive(:ingest_to_apollo)
+          .and_return({ success: false, error: 'PG::StringDataRightTruncation' })
+        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
+        expect(outcome).to eq(:skipped)
+      end
+
+      it 'returns :skipped when handle_ingest returns a non-Hash result' do
+        allow(described_class).to receive(:ingest_to_apollo).and_return(nil)
+        expect(Legion::Logging).to receive(:warn).with(/non-hash result class=NilClass/)
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
+        expect(outcome).to eq(:skipped)
+      end
+
+      it 'returns :skipped when handle_ingest returns a hash without success' do
+        allow(described_class).to receive(:ingest_to_apollo).and_return({ entry_id: 42 })
+        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
+        expect(outcome).to eq(:skipped)
+      end
+
+      it 'returns :skipped and logs when ingest_to_apollo raises' do
+        allow(described_class).to receive(:ingest_to_apollo).and_raise(StandardError, 'boom')
+        expect(Legion::Logging).to receive(:warn).with(/unexpected error/)
+        outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
+        expect(outcome).to eq(:skipped)
+      end
+    end
+  end
+
   describe '.ingest_corpus — delta behavior' do
     let(:tmp_dir)   { Dir.mktmpdir }
     let(:store_dir) { Dir.mktmpdir }

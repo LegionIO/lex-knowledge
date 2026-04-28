@@ -211,10 +211,24 @@ module Legion
             return :created unless defined?(Legion::Extensions::Apollo)
             return :skipped if !force && exists
 
-            ingest_to_apollo(chunk, embedding)
+            result = ingest_to_apollo(chunk, embedding)
+            # handle_ingest returns a Hash on both success and failure paths; the upsert
+            # status must reflect the actual persistence outcome, not just the `force` flag.
+            # Previously any non-raising return was treated as success, producing
+            # false-positive :created/:updated responses to callers.
+            unless result.is_a?(Hash) && result[:success] == true
+              hash_prefix = chunk[:content_hash]&.slice(0, 12)
+              content_len = chunk[:content]&.length
+              error = result.is_a?(Hash) ? result[:error].inspect : "non-hash result class=#{result.class}"
+              log.warn(
+                '[knowledge][upsert_chunk] apollo persistence not confirmed ' \
+                "error=#{error} chunk_hash=#{hash_prefix} chunk_len=#{content_len}"
+              )
+              return :skipped
+            end
             force ? :updated : :created
           rescue StandardError => e
-            log.warn(e.message)
+            log.warn("[knowledge][upsert_chunk] unexpected error class=#{e.class} message=#{e.message} chunk_hash=#{chunk[:content_hash]&.slice(0, 12)}")
             :skipped
           end
           private_class_method :upsert_chunk_with_embedding
