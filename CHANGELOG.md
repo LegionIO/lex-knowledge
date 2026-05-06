@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.13] - 2026-05-06
+
+### Added
+- Knowledge ingest now supports optional LLM-based chunk filtering through `knowledge.ingest.filter_prompt`, with confidence thresholding, content-hash caching, and a runner-level `filter: false` bypass for no-filter ingest flows.
+
 ## [0.6.12] - 2026-05-06
 
 ### Added

@@ -145,6 +145,81 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
     end
   end
 
+  describe 'LLM ingest filtering' do
+    let(:chunk_a) do
+      { content: 'Useful architecture notes', content_hash: 'hash_a', source_file: '/tmp/a.md', chunk_index: 0 }
+    end
+    let(:chunk_b) do
+      { content: 'Boilerplate navigation text', content_hash: 'hash_b', source_file: '/tmp/a.md', chunk_index: 1 }
+    end
+    let(:llm_double) { double('Legion::LLM') }
+
+    before do
+      described_class.send(:filter_cache).clear
+      allow(described_class).to receive(:settings_filter_prompt).and_return('Keep useful architecture notes only.')
+      allow(described_class).to receive(:settings_filter_threshold).and_return(0.7)
+      stub_const('Legion::LLM', llm_double)
+      allow(llm_double).to receive(:respond_to?).with(:structured).and_return(true)
+    end
+
+    it 'drops chunks whose structured filter result is not relevant enough' do
+      allow(llm_double).to receive(:structured).and_return(
+        { data: { relevant: true, confidence: 0.9, reason: 'useful' } },
+        { data: { relevant: false, confidence: 0.2, reason: 'noise' } }
+      )
+
+      filtered = described_class.send(:filter_chunks, [chunk_a, chunk_b], filter: true)
+
+      expect(filtered).to eq([chunk_a])
+    end
+
+    it 'caches filter results by content hash' do
+      duplicate = chunk_a.merge(content: 'Useful architecture notes repeated')
+
+      allow(llm_double).to receive(:structured).and_return(
+        { data: { relevant: true, confidence: 0.9, reason: 'useful' } },
+        { data: { relevant: false, confidence: 0.2, reason: 'noise' } }
+      )
+
+      filtered = described_class.send(:filter_chunks, [chunk_a, duplicate, chunk_b], filter: true)
+
+      expect(filtered).to eq([chunk_a, duplicate])
+      expect(llm_double).to have_received(:structured).twice
+    end
+
+    it 'bypasses the LLM when filter is disabled' do
+      expect(llm_double).not_to receive(:structured)
+
+      filtered = described_class.send(:filter_chunks, [chunk_a, chunk_b], filter: false)
+
+      expect(filtered).to eq([chunk_a, chunk_b])
+    end
+
+    it 'counts filtered chunks as skipped before embedding' do
+      allow(Legion::Extensions::Knowledge::Helpers::Parser).to receive(:parse).and_return([{ content: 'parsed' }])
+      allow(Legion::Extensions::Knowledge::Helpers::Chunker).to receive(:chunk).and_return([chunk_a, chunk_b])
+      allow(described_class).to receive(:filter_chunks).and_return([chunk_a])
+      allow(described_class).to receive(:batch_embed_chunks).with([chunk_a], force: false)
+                                                            .and_return([{ chunk: chunk_a, embedding: nil, exists: false }])
+      allow(described_class).to receive(:upsert_chunk_with_embedding).and_return(:created)
+
+      result = described_class.send(:process_file, '/tmp/a.md', dry_run: false, force: false, filter: true)
+
+      expect(result).to eq({ created: 1, skipped: 1, updated: 0 })
+    end
+
+    it 'accepts filter false on the public single-file ingest runner' do
+      allow(described_class).to receive(:process_file)
+        .with('/tmp/a.md', dry_run: false, force: false, filter: false)
+        .and_return({ created: 1, skipped: 0, updated: 0 })
+
+      result = described_class.ingest_file(file_path: '/tmp/a.md', filter: false)
+
+      expect(result[:success]).to be true
+      expect(result[:chunks_created]).to eq(1)
+    end
+  end
+
   describe '#ingest_content' do
     it 'accepts string content directly' do
       result = described_class.ingest_content(
