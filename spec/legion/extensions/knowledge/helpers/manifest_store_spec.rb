@@ -60,8 +60,8 @@ RSpec.describe Legion::Extensions::Knowledge::Helpers::ManifestStore do
       t = Time.now
       manifest = [{ path: '/b.md', size: 20, mtime: t, sha256: 'zzz' }]
       store.save(corpus_path: corpus_path, manifest: manifest)
-      raw = JSON.parse(File.read(store.store_path(corpus_path: corpus_path)))
-      expect(raw.first['mtime']).to be_a(String)
+      raw = Legion::JSON.load(File.read(store.store_path(corpus_path: corpus_path)))
+      expect(raw.first[:mtime]).to be_a(String)
     end
 
     it 'survives roundtrip with Time mtime (mtime comes back as string)' do

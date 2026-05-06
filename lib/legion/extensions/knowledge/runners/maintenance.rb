@@ -7,6 +7,9 @@ module Legion
     module Knowledge
       module Runners
         module Maintenance # rubocop:disable Legion/Extension/RunnerIncludeHelpers
+          extend Legion::Logging::Helper
+          extend Legion::Settings::Helper
+
           module_function
 
           def detect_orphans(path:)
@@ -23,6 +26,7 @@ module Legion
               total_manifest_files: manifest_files.size
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.detect_orphans', path: path)
             { success: false, error: e.message }
           end
 
@@ -36,6 +40,7 @@ module Legion
 
             { success: true, archived: archived, files_cleaned: detection[:orphan_files].size, dry_run: false }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.cleanup_orphans', path: path)
             { success: false, error: e.message }
           end
 
@@ -45,11 +50,12 @@ module Legion
 
             Runners::Ingest.ingest_corpus(path: path, force: true)
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.reindex', path: path)
             { success: false, error: e.message }
           end
 
           def health(path:)
-            resolved = path || (Legion::Settings.dig(:knowledge, :corpus_path) if defined?(Legion::Settings))
+            resolved = path || settings[:corpus_path]
             return { success: false, error: 'corpus_path is required' } if resolved.nil? || resolved.to_s.empty?
 
             scan_entries  = Helpers::Manifest.scan(path: resolved)
@@ -64,11 +70,12 @@ module Legion
               sync:    build_sync_stats(resolved, scan_entries)
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.health', path: path)
             { success: false, error: e.message }
           end
 
           def quality_report(limit: nil)
-            resolved_limit = limit || settings_quality_limit
+            resolved_limit = limit || settings[:maintenance][:quality_report_limit]
 
             {
               success:        true,
@@ -79,6 +86,7 @@ module Legion
               summary:        quality_summary
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.quality_report')
             { success: false, error: e.message }
           end
 
@@ -104,7 +112,8 @@ module Legion
 
             rows = base.select(:confidence, :status, :access_count, :embedding, :created_at).all
             apollo_stats_from_rows(base, rows, total)
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.build_apollo_stats')
             apollo_defaults
           end
           private_class_method :build_apollo_stats
@@ -112,7 +121,7 @@ module Legion
           def apollo_stats_from_rows(base, rows, total)
             confidences     = rows.map { |r| r[:confidence].to_f }
             with_embeddings = rows.count { |r| !r[:embedding].nil? }
-            stale_threshold = settings_stale_threshold
+            stale_threshold = settings[:maintenance][:stale_threshold]
             timestamps      = rows.map { |r| r[:created_at] }
 
             {
@@ -173,7 +182,8 @@ module Legion
                                  .select_map(Sequel.lit("source_context->>'source_file'"))
                                  .compact
                                  .uniq
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.load_apollo_source_files')
             []
           end
           private_class_method :load_apollo_source_files
@@ -185,7 +195,8 @@ module Legion
                                  .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
                                  .exclude(status: 'archived')
                                  .count
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.count_apollo_chunks')
             0
           end
           private_class_method :count_apollo_chunks
@@ -213,7 +224,8 @@ module Legion
                                  .select_map([:id, :access_count, :confidence,
                                               Sequel.lit("source_context->>'source_file' AS source_file")])
                                  .map { |r| { id: r[0], access_count: r[1], confidence: r[2], source_file: r[3] } }
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.hot_chunks')
             []
           end
           private_class_method :hot_chunks
@@ -221,7 +233,7 @@ module Legion
           def cold_chunks(limit)
             return [] unless Helpers::ApolloModels.entry_available?
 
-            days   = settings_cold_chunk_days
+            days   = settings[:maintenance][:cold_chunk_days]
             cutoff = Time.now - (days * 86_400)
 
             Helpers::ApolloModels.entry
@@ -234,7 +246,8 @@ module Legion
                                  .select_map([:id, :confidence, :created_at,
                                               Sequel.lit("source_context->>'source_file' AS source_file")])
                                  .map { |r| { id: r[0], confidence: r[1], created_at: r[2]&.iso8601, source_file: r[3] } }
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.cold_chunks')
             []
           end
           private_class_method :cold_chunks
@@ -242,7 +255,7 @@ module Legion
           def low_confidence_chunks(limit)
             return [] unless Helpers::ApolloModels.entry_available?
 
-            threshold = settings_stale_threshold
+            threshold = settings[:maintenance][:stale_threshold]
 
             Helpers::ApolloModels.entry
                                  .where(Sequel.pg_array_op(:tags).contains(Sequel.pg_array(['document_chunk'])))
@@ -253,7 +266,8 @@ module Legion
                                  .select_map([:id, :confidence, :access_count,
                                               Sequel.lit("source_context->>'source_file' AS source_file")])
                                  .map { |r| { id: r[0], confidence: r[1], access_count: r[2], source_file: r[3] } }
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.low_confidence_chunks')
             []
           end
           private_class_method :low_confidence_chunks
@@ -271,9 +285,10 @@ module Legion
               total_queries:          query_count,
               avg_retrieval_score:    nil,
               chunks_never_accessed:  base.where(access_count: 0).count,
-              chunks_below_threshold: base.where { confidence < settings_stale_threshold }.count
+              chunks_below_threshold: base.where { confidence < settings[:maintenance][:stale_threshold] }.count
             }
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.quality_summary')
             defaults
           end
           private_class_method :quality_summary
@@ -282,37 +297,11 @@ module Legion
             return 0 unless Helpers::ApolloModels.access_log_available?
 
             Helpers::ApolloModels.access_log.where(action: 'knowledge_query').count
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance.query_count')
             0
           end
           private_class_method :query_count
-
-          def settings_stale_threshold
-            return 0.3 unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :maintenance, :stale_threshold) || 0.3
-          rescue StandardError => _e
-            0.3
-          end
-          private_class_method :settings_stale_threshold
-
-          def settings_cold_chunk_days
-            return 7 unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :maintenance, :cold_chunk_days) || 7
-          rescue StandardError => _e
-            7
-          end
-          private_class_method :settings_cold_chunk_days
-
-          def settings_quality_limit
-            return 10 unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :maintenance, :quality_report_limit) || 10
-          rescue StandardError => _e
-            10
-          end
-          private_class_method :settings_quality_limit
         end
       end
     end

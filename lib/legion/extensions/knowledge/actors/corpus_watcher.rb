@@ -5,26 +5,25 @@ module Legion
     module Knowledge
       module Actor
         class CorpusWatcher < Legion::Extensions::Actors::Every # rubocop:disable Legion/Extension/EveryActorRequiresTime
+          include Legion::Logging::Helper
+          include Legion::Settings::Helper
+
           def runner_class    = 'Legion::Extensions::Knowledge::Runners::Ingest'
           def runner_function = 'ingest_corpus'
           def check_subtask?  = false
           def generate_task?  = false
 
           def time
-            if defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
-              Legion::Settings.dig(:knowledge, :actors, :watcher_interval) || 300
-            else
-              300
-            end
+            settings[:actors][:watcher_interval]
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.corpus_watcher.time')
             300
           end
 
           def enabled? # rubocop:disable Legion/Extension/ActorEnabledSideEffects
             resolve_monitors.any?
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.corpus_watcher.enabled')
             false
           end
 
@@ -34,14 +33,10 @@ module Legion
 
           private
 
-          def log
-            Legion::Logging
-          end
-
           def resolve_monitors
             Runners::Monitor.resolve_monitors
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.corpus_watcher.resolve_monitors')
             []
           end
         end

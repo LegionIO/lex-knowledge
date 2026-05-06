@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.14] - 2026-05-06
+
+### Changed
+- Knowledge defaults are now declared directly in `Knowledge.default_settings`, and helpers, runners, actors, and JSON sidecar persistence use Legion logging, settings, and JSON helpers end to end.
+
 ## [0.6.13] - 2026-05-06
 
 ### Added

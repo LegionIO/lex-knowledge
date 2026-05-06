@@ -9,12 +9,10 @@ module Legion
     module Knowledge
       module Runners
         module Ingest # rubocop:disable Legion/Extension/RunnerIncludeHelpers
-          module_function
+          extend Legion::Logging::Helper
+          extend Legion::Settings::Helper
 
-          def log
-            Legion::Logging
-          end
-          private_class_method :log
+          module_function
 
           def scan_corpus(path:, extensions: nil)
             opts = { path: path }
@@ -47,7 +45,7 @@ module Legion
 
             ingest_corpus_path(path: path, dry_run: dry_run, force: force, filter: filter)
           rescue ArgumentError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.ingest_corpus')
             { success: false, error: e.message }
           end
 
@@ -83,7 +81,7 @@ module Legion
               chunks_updated: chunks_updated
             }
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.ingest_corpus_path', path: path)
             { success: false, error: e.message }
           end
           private_class_method :ingest_corpus_path
@@ -92,7 +90,7 @@ module Legion
             results = monitors.map do |monitor|
               ingest_corpus(path: monitor[:path], dry_run: dry_run, force: force, filter: filter)
             rescue StandardError => e
-              log.warn(e.message)
+              handle_exception(e, level: :warn, operation: 'knowledge.ingest.ingest_monitor', path: monitor[:path])
               { success: false, path: monitor[:path], error: e.message }
             end
 
@@ -113,7 +111,7 @@ module Legion
 
             { success: true, monitors_processed: results.size, **total }
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.ingest_monitors')
             { success: false, error: e.message }
           end
           private_class_method :ingest_monitors
@@ -131,7 +129,7 @@ module Legion
             paired.each { |p| upsert_chunk_with_embedding(p[:chunk], p[:embedding], force: false, exists: p[:exists] || false) }
             { status: :ingested, chunks: chunks.size, source_type: source_type, metadata: metadata }
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.ingest_content', source_type: source_type)
             { status: :failed, error: e.message, source_type: source_type, metadata: metadata }
           end
 
@@ -146,7 +144,7 @@ module Legion
               chunks_updated: result[:updated]
             }
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.ingest_file', file_path: file_path)
             { success: false, error: e.message }
           end
 
@@ -182,12 +180,12 @@ module Legion
           def filter_chunks(chunks, filter:)
             return chunks unless filter
 
-            prompt = settings_filter_prompt
+            prompt = settings[:ingest][:filter_prompt]
             return chunks if prompt.to_s.strip.empty? || !llm_structured_available?
 
-            chunks.select { |chunk| chunk_allowed_by_filter?(chunk, prompt: prompt, threshold: settings_filter_threshold) }
+            chunks.select { |chunk| chunk_allowed_by_filter?(chunk, prompt: prompt, threshold: settings[:ingest][:filter_threshold]) }
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.filter_chunks')
             chunks
           end
           private_class_method :filter_chunks
@@ -207,7 +205,7 @@ module Legion
             data = result.is_a?(Hash) ? (result[:data] || result) : {}
             filter_cache[hash] = data[:relevant] == true && data[:confidence].to_f >= threshold.to_f
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.filter_chunk', content_hash: hash)
             filter_cache[hash] = true
           end
           private_class_method :chunk_allowed_by_filter?
@@ -222,24 +220,6 @@ module Legion
           end
           private_class_method :llm_structured_available?
 
-          def settings_filter_prompt
-            return nil unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :ingest, :filter_prompt) || Legion::Settings.dig(:knowledge, :filter_prompt)
-          rescue StandardError => _e
-            nil
-          end
-          private_class_method :settings_filter_prompt
-
-          def settings_filter_threshold
-            return 0.5 unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :ingest, :filter_threshold) || Legion::Settings.dig(:knowledge, :filter_threshold) || 0.5
-          rescue StandardError => _e
-            0.5
-          end
-          private_class_method :settings_filter_threshold
-
           def batch_embed_chunks(chunks, force:)
             exists_map = force ? {} : build_exists_map(chunks)
             return paired_without_embed(chunks, exists_map) unless llm_embed_available?
@@ -249,7 +229,7 @@ module Legion
 
             chunks.map { |c| { chunk: c, embedding: embed_map[c[:content_hash]], exists: exists_map.fetch(c[:content_hash], false) } }
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.batch_embed_chunks')
             paired_without_embed(chunks, {})
           end
           private_class_method :batch_embed_chunks
@@ -275,7 +255,7 @@ module Legion
               h[needs_embed[r[:index]][:content_hash]] = r[:vector] unless r[:error]
             end
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.build_embed_map')
             {}
           end
           private_class_method :build_embed_map
@@ -302,7 +282,7 @@ module Legion
             end
             force ? :updated : :created
           rescue StandardError => e
-            log.warn("[knowledge][upsert_chunk] unexpected error class=#{e.class} message=#{e.message} chunk_hash=#{chunk[:content_hash]&.slice(0, 12)}")
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.upsert_chunk', content_hash: chunk[:content_hash]&.slice(0, 12))
             :skipped
           end
           private_class_method :upsert_chunk_with_embedding
@@ -314,7 +294,7 @@ module Legion
                                  .where(content_hash: content_hash)
                                  .any?
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.chunk_exists', content_hash: content_hash)
             false
           end
           private_class_method :chunk_exists?
@@ -354,7 +334,7 @@ module Legion
               metadata:     { source_file: file_path, retired: true }
             )
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.ingest.retire_file', file_path: file_path)
             nil
           end
           private_class_method :retire_file

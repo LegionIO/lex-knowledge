@@ -156,8 +156,9 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
 
     before do
       described_class.send(:filter_cache).clear
-      allow(described_class).to receive(:settings_filter_prompt).and_return('Keep useful architecture notes only.')
-      allow(described_class).to receive(:settings_filter_threshold).and_return(0.7)
+      allow(described_class).to receive(:settings).and_return(
+        ingest: { filter_prompt: 'Keep useful architecture notes only.', filter_threshold: 0.7 }
+      )
       stub_const('Legion::LLM', llm_double)
       allow(llm_double).to receive(:respond_to?).with(:structured).and_return(true)
     end
@@ -293,28 +294,31 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
       it 'returns :skipped and emits a warn log when handle_ingest returns success: false' do
         allow(described_class).to receive(:ingest_to_apollo)
           .and_return({ success: false, error: 'PG::StringDataRightTruncation' })
-        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
+        expect(described_class.log).to receive(:warn).with(/apollo persistence not confirmed/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
 
       it 'returns :skipped when handle_ingest returns a non-Hash result' do
         allow(described_class).to receive(:ingest_to_apollo).and_return(nil)
-        expect(Legion::Logging).to receive(:warn).with(/non-hash result class=NilClass/)
+        expect(described_class.log).to receive(:warn).with(/non-hash result class=NilClass/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
 
       it 'returns :skipped when handle_ingest returns a hash without success' do
         allow(described_class).to receive(:ingest_to_apollo).and_return({ entry_id: 42 })
-        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
+        expect(described_class.log).to receive(:warn).with(/apollo persistence not confirmed/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
 
       it 'returns :skipped and logs when ingest_to_apollo raises' do
         allow(described_class).to receive(:ingest_to_apollo).and_raise(StandardError, 'boom')
-        expect(Legion::Logging).to receive(:warn).with(/unexpected error/)
+        expect(described_class).to receive(:handle_exception).with(
+          instance_of(StandardError),
+          hash_including(level: :warn, operation: 'knowledge.ingest.upsert_chunk')
+        )
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end

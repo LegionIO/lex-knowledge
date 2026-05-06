@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'bundler/setup'
+require 'legion/json'
+require 'legion/settings'
 require 'tmpdir'
 require 'fileutils'
 
@@ -36,6 +38,8 @@ module Legion
 end
 
 require 'legion/extensions/knowledge'
+
+Legion::Settings[:extensions][:knowledge] = Legion::Extensions::Knowledge.default_settings
 
 RSpec.configure do |config|
   config.example_status_persistence_file_path = '.rspec_status'

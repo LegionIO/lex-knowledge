@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'legion/logging'
+require 'legion/settings'
+require 'legion/json'
 require_relative 'knowledge/version'
 require_relative 'knowledge/helpers/manifest'
 require_relative 'knowledge/helpers/manifest_store'
@@ -28,10 +31,40 @@ require_relative 'knowledge/actors/corpus_ingest'
 module Legion
   module Extensions
     module Knowledge
+      extend Legion::Logging::Helper
+      extend Legion::Settings::Helper
       extend Legion::Extensions::Core if defined?(Legion::Extensions::Core)
 
       def self.remote_invocable?
         false
+      end
+
+      def self.default_settings
+        {
+          corpus_path: nil,
+          monitors:    [],
+          chunker:     {
+            max_tokens:     512,
+            overlap_tokens: 128
+          },
+          query:       {
+            top_k:           5,
+            neighbor_radius: 1
+          },
+          ingest:      {
+            filter_prompt:    nil,
+            filter_threshold: 0.5
+          },
+          maintenance: {
+            stale_threshold:      0.3,
+            cold_chunk_days:      7,
+            quality_report_limit: 10
+          },
+          actors:      {
+            watcher_interval:     300,
+            maintenance_interval: 21_600
+          }
+        }
       end
     end
   end

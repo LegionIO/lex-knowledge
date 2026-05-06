@@ -5,6 +5,8 @@ module Legion
     module Knowledge
       module Runners
         module Corpus # rubocop:disable Legion/Extension/RunnerIncludeHelpers
+          extend Legion::Logging::Helper
+
           module_function
 
           def manifest_path(path:)
@@ -32,6 +34,7 @@ module Legion
               total_bytes:      entries.sum { |e| e[:size] }
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.corpus.corpus_stats', path: path)
             { success: false, error: e.message }
           end
         end

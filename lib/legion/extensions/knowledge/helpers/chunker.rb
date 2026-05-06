@@ -7,13 +7,16 @@ module Legion
     module Knowledge
       module Helpers
         module Chunker
+          extend Legion::Logging::Helper
+          extend Legion::Settings::Helper
+
           CHARS_PER_TOKEN = 4
 
           module_function
 
           def chunk(sections:, max_tokens: nil, overlap_tokens: nil)
-            resolved_max     = max_tokens     || settings_max_tokens     || 512
-            resolved_overlap = overlap_tokens || settings_overlap_tokens || 128
+            resolved_max     = max_tokens     || settings[:chunker][:max_tokens]
+            resolved_overlap = overlap_tokens || settings[:chunker][:overlap_tokens]
 
             max_chars     = resolved_max * CHARS_PER_TOKEN
             overlap_chars = resolved_overlap * CHARS_PER_TOKEN
@@ -89,24 +92,6 @@ module Legion
             end
           end
           private_class_method :apollo_compatible_content_hash
-
-          def settings_max_tokens
-            return nil unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :chunker, :max_tokens)
-          rescue StandardError => _e
-            nil
-          end
-          private_class_method :settings_max_tokens
-
-          def settings_overlap_tokens
-            return nil unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :chunker, :overlap_tokens)
-          rescue StandardError => _e
-            nil
-          end
-          private_class_method :settings_overlap_tokens
         end
       end
     end

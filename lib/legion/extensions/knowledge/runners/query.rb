@@ -3,18 +3,21 @@
 require_relative '../helpers/apollo_models'
 
 require 'digest'
-require 'json'
 
 module Legion
   module Extensions
     module Knowledge
       module Runners
         module Query # rubocop:disable Legion/Extension/RunnerIncludeHelpers
+          extend Legion::Logging::Helper
+          extend Legion::JSON::Helper
+          extend Legion::Settings::Helper
+
           module_function
 
           def query(question:, top_k: nil, synthesize: true, expand_neighbors: false, neighbor_radius: nil)
             started = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
-            resolved_k      = top_k || settings_top_k || 5
+            resolved_k      = top_k || settings[:query][:top_k]
             resolved_radius = resolve_neighbor_radius(neighbor_radius)
 
             chunks = retrieve_chunks(
@@ -45,11 +48,12 @@ module Legion
               metadata: build_metadata(chunks, score, latency_ms)
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.query')
             { success: false, error: e.message }
           end
 
           def retrieve(question:, top_k: nil, expand_neighbors: false, neighbor_radius: nil)
-            resolved_k      = top_k || settings_top_k || 5
+            resolved_k      = top_k || settings[:query][:top_k]
             resolved_radius = resolve_neighbor_radius(neighbor_radius)
             chunks          = retrieve_chunks(
               question,
@@ -64,6 +68,7 @@ module Legion
               metadata: build_metadata(chunks, average_score(chunks))
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.retrieve')
             { success: false, error: e.message }
           end
 
@@ -78,6 +83,7 @@ module Legion
             )
             { success: true, question_hash: question_hash, rating: rating }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.record_feedback')
             { success: false, error: e.message }
           end
 
@@ -91,7 +97,8 @@ module Legion
             )
             chunks = result.is_a?(Hash) && result[:success] ? Array(result[:entries]) : []
             expand_neighbors ? expand_neighbor_chunks(chunks, neighbor_radius) : chunks
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.retrieve_chunks')
             []
           end
           private_class_method :retrieve_chunks
@@ -103,7 +110,8 @@ module Legion
             return chunks unless radius.positive? && Helpers::ApolloModels.entry_available?
 
             merge_neighbor_chunks(chunks.flat_map { |chunk| neighbor_window_for(chunk, radius) })
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.expand_neighbor_chunks')
             chunks
           end
           private_class_method :expand_neighbor_chunks
@@ -120,7 +128,8 @@ module Legion
             rows = neighbor_dataset(source_file, lower, upper).all.map { |entry| chunk_from_entry(entry) }
             rows << chunk unless rows.any? { |row| chunk_dedupe_key(row) == chunk_dedupe_key(chunk) }
             rows.sort_by { |row| chunk_context(row)[:chunk_index].to_i }
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.neighbor_window')
             [chunk]
           end
           private_class_method :neighbor_window_for
@@ -175,6 +184,7 @@ module Legion
             result = llm_chat(message: prompt, caller: { extension: 'lex-knowledge' })
             result.is_a?(Hash) ? result[:content] : result
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.synthesize_answer')
             "Error generating answer: #{e.message}"
           end
           private_class_method :synthesize_answer
@@ -201,7 +211,8 @@ module Legion
             context[:chunk_index] ||= chunk[:chunk_index]
             context[:heading] ||= chunk[:heading]
             context
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.chunk_context')
             {}
           end
           private_class_method :chunk_context
@@ -215,7 +226,7 @@ module Legion
           def normalize_context(context)
             normalized = case context
                          when String
-                           context.strip.empty? ? {} : ::JSON.parse(context, symbolize_names: true)
+                           context.strip.empty? ? {} : json_parse(context)
                          when Hash
                            context
                          else
@@ -223,7 +234,8 @@ module Legion
                          end
 
             normalized.transform_keys { |key| key.respond_to?(:to_sym) ? key.to_sym : key }
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.normalize_context')
             {}
           end
           private_class_method :normalize_context
@@ -289,7 +301,8 @@ module Legion
                                   synthesized:     synthesized,
                                   rating:          rating
                                 })
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.emit_feedback_event')
             nil
           end
           private_class_method :emit_feedback_event
@@ -299,28 +312,10 @@ module Legion
           end
           private_class_method :llm_available?
 
-          def settings_top_k
-            return nil unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :query, :top_k)
-          rescue StandardError => _e
-            nil
-          end
-          private_class_method :settings_top_k
-
           def resolve_neighbor_radius(neighbor_radius)
-            (neighbor_radius || settings_neighbor_radius || 1).to_i
+            (neighbor_radius || settings[:query][:neighbor_radius]).to_i
           end
           private_class_method :resolve_neighbor_radius
-
-          def settings_neighbor_radius
-            return nil unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :query, :neighbor_radius)
-          rescue StandardError => _e
-            nil
-          end
-          private_class_method :settings_neighbor_radius
         end
       end
     end

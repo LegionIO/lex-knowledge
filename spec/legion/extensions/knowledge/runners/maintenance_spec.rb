@@ -295,22 +295,16 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Maintenance do
     end
 
     it 'uses settings corpus_path when path is nil and settings are present' do
-      stub_const('Legion::Settings', Module.new do
-        def self.dig(*keys)
-          { knowledge: { corpus_path: nil } }.dig(*keys)
-        end
-      end)
+      allow(described_class).to receive(:settings).and_return(Legion::Extensions::Knowledge.default_settings)
       result = described_class.health(path: nil)
       expect(result[:success]).to be false
       expect(result[:error]).to eq('corpus_path is required')
     end
 
     it 'falls back to settings corpus_path when set' do
-      stub_const('Legion::Settings', Module.new do
-        def self.dig(*_keys)
-          Dir.pwd
-        end
-      end)
+      allow(described_class).to receive(:settings).and_return(
+        Legion::Extensions::Knowledge.default_settings.merge(corpus_path: Dir.pwd)
+      )
       result = described_class.health(path: nil)
       expect(result[:success]).to be true
       expect(result).to include(:local, :apollo, :sync)
