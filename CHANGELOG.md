@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.12] - 2026-05-06
+
+### Added
+- Query and retrieve runners now support optional neighbor expansion (`expand_neighbors: true`, `neighbor_radius:`) to include adjacent document chunks around Apollo retrieval hits.
+
+### Fixed
+- Knowledge ingest now sends chunk source metadata as Apollo `context` so `source_file` and `chunk_index` are available for neighbor retrieval.
+
 ## [0.6.11] - 2026-05-06
 
 ### Fixed

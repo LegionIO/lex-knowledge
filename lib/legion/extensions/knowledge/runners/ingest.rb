@@ -250,18 +250,20 @@ module Legion
           def ingest_to_apollo(chunk, embedding)
             return unless defined?(Legion::Extensions::Apollo)
 
+            context = {
+              source_file:  chunk[:source_file],
+              heading:      chunk[:heading],
+              section_path: chunk[:section_path],
+              chunk_index:  chunk[:chunk_index],
+              token_count:  chunk[:token_count]
+            }
             payload = {
               content:      chunk[:content],
               content_type: 'document_chunk',
               content_hash: chunk[:content_hash],
               tags:         [chunk[:source_file], chunk[:heading], 'document_chunk'].compact.uniq,
-              metadata:     {
-                source_file:  chunk[:source_file],
-                heading:      chunk[:heading],
-                section_path: chunk[:section_path],
-                chunk_index:  chunk[:chunk_index],
-                token_count:  chunk[:token_count]
-              }
+              context:      context,
+              metadata:     context
             }
             payload[:embedding] = embedding if embedding
 

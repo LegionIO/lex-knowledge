@@ -246,6 +246,41 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
     end
   end
 
+  describe '.ingest_to_apollo' do
+    let(:chunk) do
+      {
+        content:      'Chunk contents for Apollo context.',
+        content_hash: 'abcdef0123456789abcdef0123456789',
+        source_file:  '/tmp/context.md',
+        heading:      'Context',
+        section_path: ['Context'],
+        chunk_index:  4,
+        token_count:  7
+      }
+    end
+
+    before do
+      stub_const('Legion::Extensions::Apollo', Module.new)
+      runners_mod = Module.new
+      knowledge_mod = Module.new
+      knowledge_mod.define_singleton_method(:handle_ingest) { |**| { success: true } }
+      runners_mod.const_set(:Knowledge, knowledge_mod)
+      stub_const('Legion::Extensions::Apollo::Runners', runners_mod)
+    end
+
+    it 'passes chunk metadata as Apollo context for neighbor retrieval' do
+      expect(Legion::Extensions::Apollo::Runners::Knowledge).to receive(:handle_ingest).with(
+        hash_including(
+          content:  chunk[:content],
+          context:  hash_including(source_file: '/tmp/context.md', chunk_index: 4),
+          metadata: hash_including(source_file: '/tmp/context.md', chunk_index: 4)
+        )
+      ).and_return({ success: true })
+
+      described_class.send(:ingest_to_apollo, chunk, nil)
+    end
+  end
+
   describe '.ingest_corpus — delta behavior' do
     let(:tmp_dir)   { Dir.mktmpdir }
     let(:store_dir) { Dir.mktmpdir }

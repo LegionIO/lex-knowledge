@@ -80,6 +80,79 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Query do
     end
   end
 
+  describe 'neighbor expansion' do
+    before do
+      stub_const('Legion::Extensions::Apollo', Module.new)
+      runners_mod = Module.new
+      knowledge_mod = Module.new
+      knowledge_mod.define_singleton_method(:retrieve_relevant) do |**|
+        { success: true, entries: [
+          { id: 2, content: 'middle chunk',
+            metadata: { source_file: '/docs/a.md', chunk_index: 1 },
+            distance: 0.1 }
+        ] }
+      end
+      runners_mod.const_set(:Knowledge, knowledge_mod)
+      stub_const('Legion::Extensions::Apollo::Runners', runners_mod)
+      allow(Legion::Extensions::Knowledge::Helpers::ApolloModels).to receive(:entry_available?).and_return(true)
+    end
+
+    it 'leaves retrieval results unchanged by default' do
+      expect(described_class).not_to receive(:neighbor_window_for)
+
+      result = described_class.retrieve(question: 'legion')
+
+      expect(result[:success]).to be true
+      expect(result[:sources].map { |s| s[:content] }).to eq(['middle chunk'])
+    end
+
+    it 'expands each hit with adjacent chunks when requested' do
+      neighbor_window = [
+        {
+          id: 1, content: 'previous chunk',
+          metadata: { source_file: '/docs/a.md', chunk_index: 0 }
+        },
+        {
+          id: 2, content: 'middle chunk',
+          metadata: { source_file: '/docs/a.md', chunk_index: 1 }, distance: 0.1
+        },
+        {
+          id: 3, content: 'next chunk',
+          metadata: { source_file: '/docs/a.md', chunk_index: 2 }
+        }
+      ]
+      allow(described_class).to receive(:neighbor_window_for).and_return(neighbor_window)
+
+      result = described_class.retrieve(question: 'legion', expand_neighbors: true, neighbor_radius: 1)
+
+      expect(result[:success]).to be true
+      expect(result[:sources].map { |s| s[:content] }).to eq(['previous chunk', 'middle chunk', 'next chunk'])
+      expect(result[:metadata][:chunk_count]).to eq(3)
+    end
+
+    it 'deduplicates overlapping neighbor windows' do
+      allow(described_class).to receive(:neighbor_window_for).and_return(
+        [
+          { id: 1, content: 'previous chunk', metadata: { source_file: '/docs/a.md', chunk_index: 0 } },
+          { id: 2, content: 'middle chunk', metadata: { source_file: '/docs/a.md', chunk_index: 1 } }
+        ],
+        [
+          { id: 2, content: 'middle chunk', metadata: { source_file: '/docs/a.md', chunk_index: 1 } },
+          { id: 3, content: 'next chunk', metadata: { source_file: '/docs/a.md', chunk_index: 2 } }
+        ]
+      )
+
+      expanded = described_class.send(:merge_neighbor_chunks, [
+                                        { id: 1, content: 'previous chunk' },
+                                        { id: 2, content: 'middle chunk' },
+                                        { id: 2, content: 'middle chunk duplicate' },
+                                        { id: 3, content: 'next chunk' }
+                                      ])
+
+      expect(expanded.map { |chunk| chunk[:id] }).to eq([1, 2, 3])
+    end
+  end
+
   describe '.record_feedback' do
     it 'returns success with question_hash' do
       result = described_class.record_feedback(
