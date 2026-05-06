@@ -5,19 +5,18 @@ module Legion
     module Knowledge
       module Actor
         class MaintenanceRunner < Legion::Extensions::Actors::Every # rubocop:disable Legion/Extension/EveryActorRequiresTime
+          include Legion::Logging::Helper
+          include Legion::Settings::Helper
+
           def runner_class    = 'Legion::Extensions::Knowledge::Runners::Maintenance'
           def runner_function = 'health'
           def check_subtask?  = false
           def generate_task?  = false
 
           def time
-            if defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
-              Legion::Settings.dig(:knowledge, :actors, :maintenance_interval) || 21_600
-            else
-              21_600
-            end
+            settings[:actors][:maintenance_interval]
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance_runner.time')
             21_600
           end
 
@@ -26,7 +25,7 @@ module Legion
 
             true
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance_runner.enabled')
             false
           end
 
@@ -36,16 +35,10 @@ module Legion
 
           private
 
-          def log
-            Legion::Logging
-          end
-
           def corpus_path
-            return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
-
-            Legion::Settings.dig(:knowledge, :corpus_path)
+            settings[:corpus_path]
           rescue StandardError => e
-            log.warn(e.message)
+            handle_exception(e, level: :warn, operation: 'knowledge.maintenance_runner.corpus_path')
             nil
           end
         end

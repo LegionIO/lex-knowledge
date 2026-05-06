@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.6.14] - 2026-05-06
+
+### Changed
+- Knowledge defaults are now declared directly in `Knowledge.default_settings`, and helpers, runners, actors, and JSON sidecar persistence use Legion logging, settings, and JSON helpers end to end.
+
+## [0.6.13] - 2026-05-06
+
+### Added
+- Knowledge ingest now supports optional LLM-based chunk filtering through `knowledge.ingest.filter_prompt`, with confidence thresholding, content-hash caching, and a runner-level `filter: false` bypass for no-filter ingest flows.
+
+## [0.6.12] - 2026-05-06
+
+### Added
+- Query and retrieve runners now support optional neighbor expansion (`expand_neighbors: true`, `neighbor_radius:`) to include adjacent document chunks around Apollo retrieval hits.
+
+### Fixed
+- Knowledge ingest now sends chunk source metadata as Apollo `context` so `source_file` and `chunk_index` are available for neighbor retrieval.
+
+## [0.6.11] - 2026-05-06
+
+### Fixed
+- Knowledge ingest and maintenance now resolve Apollo data models through the namespaced `Legion::Data::Model::Apollo::*` classes introduced by the legion-data schema cleanup, with fallback support for legacy Apollo model constants.
+
 ## [0.6.10] - 2026-04-28
 
 ### Fixed

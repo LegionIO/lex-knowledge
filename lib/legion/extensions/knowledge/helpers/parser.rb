@@ -5,6 +5,8 @@ module Legion
     module Knowledge
       module Helpers
         module Parser
+          extend Legion::Logging::Helper
+
           module_function
 
           def parse(file_path:)
@@ -57,6 +59,7 @@ module Legion
             heading = ::File.basename(file_path, '.*')
             [{ heading: heading, section_path: [], content: result[:text].strip, source_file: file_path }]
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.parser.extract_via_data', file_path: file_path)
             [{ error: 'extraction_failed', source_file: file_path, detail: e.message }]
           end
 

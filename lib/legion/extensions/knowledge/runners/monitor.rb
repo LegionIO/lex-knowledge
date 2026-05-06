@@ -5,6 +5,9 @@ module Legion
     module Knowledge
       module Runners
         module Monitor # rubocop:disable Legion/Extension/RunnerIncludeHelpers
+          extend Legion::Logging::Helper
+          extend Legion::Settings::Helper
+
           module_function
 
           DEFAULT_EXTENSIONS = %w[.md .txt].freeze
@@ -18,7 +21,8 @@ module Legion
             end
 
             monitors
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.resolve_monitors')
             []
           end
 
@@ -41,6 +45,7 @@ module Legion
 
             { success: true, monitor: entry }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.add_monitor', path: path)
             { success: false, error: e.message }
           end
 
@@ -54,12 +59,14 @@ module Legion
 
             { success: true, removed: found }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.remove_monitor', identifier: identifier)
             { success: false, error: e.message }
           end
 
           def list_monitors
             { success: true, monitors: resolve_monitors }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.list_monitors')
             { success: false, error: e.message }
           end
 
@@ -70,44 +77,40 @@ module Legion
             monitors.each do |m|
               scan = Helpers::Manifest.scan(path: m[:path], extensions: m[:extensions])
               total_files += scan.size
-            rescue StandardError => _e
+            rescue StandardError => e
+              handle_exception(e, level: :warn, operation: 'knowledge.monitor.scan_monitor', path: m[:path])
               next
             end
 
             { success: true, total_monitors: monitors.size, total_files: total_files }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.monitor_status')
             { success: false, error: e.message }
           end
 
           # --- private helpers ---
 
           def read_monitors_setting
-            return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
-
-            Legion::Settings.dig(:knowledge, :monitors)
-          rescue StandardError => _e
+            settings[:monitors]
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.read_monitors_setting')
             nil
           end
           private_class_method :read_monitors_setting
 
           def read_legacy_corpus_path
-            return nil unless defined?(Legion::Settings) && !Legion::Settings[:knowledge].nil?
-
-            Legion::Settings.dig(:knowledge, :corpus_path)
-          rescue StandardError => _e
+            settings[:corpus_path]
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.read_legacy_corpus_path')
             nil
           end
           private_class_method :read_legacy_corpus_path
 
           def persist_monitors(monitors)
-            return false unless defined?(Legion::Settings)
-
-            loader = Legion::Settings.loader
-            knowledge = loader.settings[:knowledge] || {}
-            knowledge[:monitors] = monitors
-            loader.settings[:knowledge] = knowledge
+            settings[:monitors] = monitors
             true
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.monitor.persist_monitors')
             false
           end
           private_class_method :persist_monitors
