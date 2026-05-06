@@ -72,6 +72,28 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Maintenance do
     end
   end
 
+  describe '.count_apollo_chunks' do
+    let(:entry_model) { class_double('Legion::Data::Model::Apollo::Entry') }
+    let(:dataset) { instance_double('ApolloEntryDataset') }
+    let(:tags_op) { instance_double('Sequel::Postgres::PGArrayOp') }
+
+    before do
+      hide_const('Legion::Data::Model::ApolloEntry') if defined?(Legion::Data::Model::ApolloEntry)
+      stub_const('Legion::Data::Model::Apollo::Entry', entry_model)
+      stub_const('Sequel', Module.new) unless defined?(Sequel)
+      allow(Sequel).to receive(:pg_array).with(['document_chunk']).and_return(['document_chunk'])
+      allow(Sequel).to receive(:pg_array_op).with(:tags).and_return(tags_op)
+      allow(tags_op).to receive(:contains).with(['document_chunk']).and_return(:document_chunk_filter)
+      allow(entry_model).to receive(:where).with(:document_chunk_filter).and_return(dataset)
+      allow(dataset).to receive(:exclude).with(status: 'archived').and_return(dataset)
+      allow(dataset).to receive(:count).and_return(7)
+    end
+
+    it 'counts chunks through the namespaced Apollo entry model' do
+      expect(described_class.send(:count_apollo_chunks)).to eq(7)
+    end
+  end
+
   describe '.cleanup_orphans' do
     before { Legion::Extensions::Knowledge::Runners::Ingest.ingest_corpus(path: tmp_dir) }
 

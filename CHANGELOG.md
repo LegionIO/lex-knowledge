@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.11] - 2026-05-06
+
+### Fixed
+- Knowledge ingest and maintenance now resolve Apollo data models through the namespaced `Legion::Data::Model::Apollo::*` classes introduced by the legion-data schema cleanup, with fallback support for legacy Apollo model constants.
+
 ## [0.6.10] - 2026-04-28
 
 ### Fixed

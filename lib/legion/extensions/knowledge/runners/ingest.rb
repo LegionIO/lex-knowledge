@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../helpers/apollo_models'
+
 require 'securerandom'
 
 module Legion
@@ -234,11 +236,11 @@ module Legion
           private_class_method :upsert_chunk_with_embedding
 
           def chunk_exists?(content_hash)
-            return false unless defined?(Legion::Data::Model::ApolloEntry)
+            return false unless Helpers::ApolloModels.entry_available?
 
-            Legion::Data::Model::ApolloEntry
-              .where(content_hash: content_hash)
-              .any?
+            Helpers::ApolloModels.entry
+                                 .where(content_hash: content_hash)
+                                 .any?
           rescue StandardError => e
             log.warn(e.message)
             false
