@@ -9,6 +9,11 @@ module Legion
         module Query # rubocop:disable Legion/Extension/RunnerIncludeHelpers
           module_function
 
+          def log
+            Legion::Logging
+          end
+          private_class_method :log
+
           def query(question:, top_k: nil, synthesize: true)
             started = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
             resolved_k = top_k || settings_top_k || 5
@@ -75,7 +80,8 @@ module Legion
               tags:  ['document_chunk']
             )
             result.is_a?(Hash) && result[:success] ? Array(result[:entries]) : []
-          rescue StandardError => _e
+          rescue StandardError => e
+            log.warn("[knowledge][retrieve_chunks] retrieval failed: #{e.class}: #{e.message}")
             []
           end
           private_class_method :retrieve_chunks
@@ -97,7 +103,8 @@ module Legion
             )
             result.is_a?(Hash) ? result[:content] : result.content
           rescue StandardError => e
-            "Error generating answer: #{e.message}"
+            log.warn("[knowledge][synthesize_answer] LLM synthesis failed: #{e.class}: #{e.message}")
+            nil
           end
           private_class_method :synthesize_answer
 

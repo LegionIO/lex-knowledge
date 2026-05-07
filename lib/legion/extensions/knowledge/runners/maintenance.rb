@@ -279,7 +279,7 @@ module Legion
           def query_count
             return 0 unless defined?(Legion::Data::Model::ApolloAccessLog)
 
-            Legion::Data::Model::ApolloAccessLog.where(action: 'knowledge_query').count
+            Legion::Data::Model::ApolloAccessLog.where(action: 'query').count
           rescue StandardError => _e
             0
           end
