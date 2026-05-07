@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../helpers/apollo_models'
+
 require 'digest'
 
 module Legion
@@ -7,18 +9,23 @@ module Legion
     module Knowledge
       module Runners
         module Query # rubocop:disable Legion/Extension/RunnerIncludeHelpers
+          extend Legion::Logging::Helper
+          extend Legion::JSON::Helper
+          extend Legion::Settings::Helper
+
           module_function
 
-          def log
-            Legion::Logging
-          end
-          private_class_method :log
-
-          def query(question:, top_k: nil, synthesize: true)
+          def query(question:, top_k: nil, synthesize: true, expand_neighbors: false, neighbor_radius: nil)
             started = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
-            resolved_k = top_k || settings_top_k || 5
+            resolved_k      = top_k || settings[:query][:top_k]
+            resolved_radius = resolve_neighbor_radius(neighbor_radius)
 
-            chunks = retrieve_chunks(question, resolved_k)
+            chunks = retrieve_chunks(
+              question,
+              resolved_k,
+              expand_neighbors: expand_neighbors,
+              neighbor_radius:  resolved_radius
+            )
 
             answer = (synthesize_answer(question, chunks) if synthesize && llm_available?)
 
@@ -41,12 +48,19 @@ module Legion
               metadata: build_metadata(chunks, score, latency_ms)
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.query')
             { success: false, error: e.message }
           end
 
-          def retrieve(question:, top_k: nil)
-            resolved_k = top_k || settings_top_k || 5
-            chunks     = retrieve_chunks(question, resolved_k)
+          def retrieve(question:, top_k: nil, expand_neighbors: false, neighbor_radius: nil)
+            resolved_k      = top_k || settings[:query][:top_k]
+            resolved_radius = resolve_neighbor_radius(neighbor_radius)
+            chunks          = retrieve_chunks(
+              question,
+              resolved_k,
+              expand_neighbors: expand_neighbors,
+              neighbor_radius:  resolved_radius
+            )
 
             {
               success:  true,
@@ -54,6 +68,7 @@ module Legion
               metadata: build_metadata(chunks, average_score(chunks))
             }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.retrieve')
             { success: false, error: e.message }
           end
 
@@ -68,10 +83,11 @@ module Legion
             )
             { success: true, question_hash: question_hash, rating: rating }
           rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.record_feedback')
             { success: false, error: e.message }
           end
 
-          def retrieve_chunks(question, top_k)
+          def retrieve_chunks(question, top_k, expand_neighbors: false, neighbor_radius: 1)
             return [] unless defined?(Legion::Extensions::Apollo)
 
             result = Legion::Extensions::Apollo::Runners::Knowledge.retrieve_relevant(
@@ -79,12 +95,80 @@ module Legion
               limit: top_k,
               tags:  ['document_chunk']
             )
-            result.is_a?(Hash) && result[:success] ? Array(result[:entries]) : []
+            chunks = result.is_a?(Hash) && result[:success] ? Array(result[:entries]) : []
+            expand_neighbors ? expand_neighbor_chunks(chunks, neighbor_radius) : chunks
           rescue StandardError => e
-            log.warn("[knowledge][retrieve_chunks] retrieval failed: #{e.class}: #{e.message}")
+            handle_exception(e, level: :warn, operation: 'knowledge.query.retrieve_chunks')
             []
           end
           private_class_method :retrieve_chunks
+
+          def expand_neighbor_chunks(chunks, neighbor_radius)
+            return chunks if chunks.empty?
+
+            radius = neighbor_radius.to_i
+            return chunks unless radius.positive? && Helpers::ApolloModels.entry_available?
+
+            merge_neighbor_chunks(chunks.flat_map { |chunk| neighbor_window_for(chunk, radius) })
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.expand_neighbor_chunks')
+            chunks
+          end
+          private_class_method :expand_neighbor_chunks
+
+          def neighbor_window_for(chunk, radius)
+            context = chunk_context(chunk)
+            return [chunk] unless context[:source_file] && !context[:chunk_index].nil?
+
+            source_file = context[:source_file]
+            chunk_index = context[:chunk_index].to_i
+            lower       = chunk_index - radius
+            upper       = chunk_index + radius
+
+            rows = neighbor_dataset(source_file, lower, upper).all.map { |entry| chunk_from_entry(entry) }
+            rows << chunk unless rows.any? { |row| chunk_dedupe_key(row) == chunk_dedupe_key(chunk) }
+            rows.sort_by { |row| chunk_context(row)[:chunk_index].to_i }
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.neighbor_window')
+            [chunk]
+          end
+          private_class_method :neighbor_window_for
+
+          def neighbor_dataset(source_file, lower, upper)
+            Helpers::ApolloModels.entry
+                                 .where(content_type: 'document_chunk')
+                                 .where(Sequel.lit("source_context->>'source_file' = ?", source_file))
+                                 .where(Sequel.lit("(source_context->>'chunk_index')::integer BETWEEN ? AND ?", lower, upper))
+                                 .order(Sequel.lit("(source_context->>'chunk_index')::integer ASC"))
+          end
+          private_class_method :neighbor_dataset
+
+          def chunk_from_entry(entry)
+            values = entry.respond_to?(:values) ? entry.values : entry
+            context = normalize_context(values[:source_context] || values[:metadata] || values[:context])
+
+            {
+              id:               values[:id],
+              content:          values[:content],
+              content_type:     values[:content_type],
+              confidence:       values[:confidence],
+              tags:             values[:tags],
+              source_agent:     values[:source_agent],
+              knowledge_domain: values[:knowledge_domain],
+              status:           values[:status],
+              content_hash:     values[:content_hash],
+              metadata:         context
+            }.compact
+          end
+          private_class_method :chunk_from_entry
+
+          def merge_neighbor_chunks(chunks)
+            chunks.each_with_object({}) do |chunk, merged|
+              key = chunk_dedupe_key(chunk)
+              merged[key] ||= chunk
+            end.values
+          end
+          private_class_method :merge_neighbor_chunks
 
           def synthesize_answer(question, chunks)
             return nil unless llm_available?
@@ -103,7 +187,7 @@ module Legion
             )
             result.is_a?(Hash) ? result[:content] : result.content
           rescue StandardError => e
-            log.warn("[knowledge][synthesize_answer] LLM synthesis failed: #{e.class}: #{e.message}")
+            handle_exception(e, level: :warn, operation: 'knowledge.query.synthesize_answer')
             nil
           end
           private_class_method :synthesize_answer
@@ -113,10 +197,60 @@ module Legion
               content:     chunk[:content],
               source_file: chunk.dig(:metadata, :source_file) || chunk[:source_file],
               heading:     chunk.dig(:metadata, :heading)     || chunk[:heading],
+              chunk_index: chunk.dig(:metadata, :chunk_index) || chunk[:chunk_index],
               distance:    chunk[:distance] || chunk[:score]
             }
           end
           private_class_method :format_source
+
+          def chunk_context(chunk)
+            context = normalize_context(chunk[:metadata] || chunk[:source_context] || chunk[:context])
+            if (context[:source_file].nil? || context[:chunk_index].nil?) && chunk[:id] && Helpers::ApolloModels.entry_available?
+              row = Helpers::ApolloModels.entry.where(id: chunk[:id]).first
+              context = context.merge(normalize_context(row_context(row))) if row
+            end
+
+            context[:source_file] ||= chunk[:source_file]
+            context[:chunk_index] ||= chunk[:chunk_index]
+            context[:heading] ||= chunk[:heading]
+            context
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.chunk_context')
+            {}
+          end
+          private_class_method :chunk_context
+
+          def row_context(row)
+            values = row.respond_to?(:values) ? row.values : row
+            values[:source_context] || values[:metadata] || values[:context]
+          end
+          private_class_method :row_context
+
+          def normalize_context(context)
+            normalized = case context
+                         when String
+                           context.strip.empty? ? {} : json_parse(context)
+                         when Hash
+                           context
+                         else
+                           {}
+                         end
+
+            normalized.transform_keys { |key| key.respond_to?(:to_sym) ? key.to_sym : key }
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.normalize_context')
+            {}
+          end
+          private_class_method :normalize_context
+
+          def chunk_dedupe_key(chunk)
+            chunk[:id] || chunk[:content_hash] || [
+              chunk_context(chunk)[:source_file],
+              chunk_context(chunk)[:chunk_index],
+              chunk[:content]
+            ]
+          end
+          private_class_method :chunk_dedupe_key
 
           def average_score(chunks)
             return nil if chunks.empty?
@@ -170,7 +304,8 @@ module Legion
                                   synthesized:     synthesized,
                                   rating:          rating
                                 })
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.query.emit_feedback_event')
             nil
           end
           private_class_method :emit_feedback_event
@@ -180,14 +315,10 @@ module Legion
           end
           private_class_method :llm_available?
 
-          def settings_top_k
-            return nil unless defined?(Legion::Settings)
-
-            Legion::Settings.dig(:knowledge, :query, :top_k)
-          rescue StandardError => _e
-            nil
+          def resolve_neighbor_radius(neighbor_radius)
+            (neighbor_radius || settings[:query][:neighbor_radius]).to_i
           end
-          private_class_method :settings_top_k
+          private_class_method :resolve_neighbor_radius
         end
       end
     end

@@ -2,7 +2,7 @@
 
 require 'digest'
 require 'fileutils'
-require 'json'
+require 'legion/json'
 require 'tempfile'
 
 module Legion
@@ -10,6 +10,9 @@ module Legion
     module Knowledge
       module Helpers
         module ManifestStore
+          extend Legion::Logging::Helper
+          extend Legion::JSON::Helper
+
           module_function
 
           STORE_DIR = ::File.expand_path('~/.legionio/knowledge').freeze
@@ -19,8 +22,9 @@ module Legion
             return [] unless ::File.exist?(path)
 
             raw = ::File.read(path, encoding: 'utf-8')
-            ::JSON.parse(raw, symbolize_names: true)
-          rescue StandardError => _e
+            json_parse(raw)
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.manifest_store.load', corpus_path: corpus_path)
             []
           end
 
@@ -28,10 +32,11 @@ module Legion
             ::FileUtils.mkdir_p(STORE_DIR)
             path = store_path(corpus_path: corpus_path)
             tmp  = "#{path}.tmp"
-            ::File.write(tmp, ::JSON.generate(manifest.map { |e| serialize_entry(e) }))
+            ::File.write(tmp, json_generate(manifest.map { |e| serialize_entry(e) }))
             ::File.rename(tmp, path)
             true
-          rescue StandardError => _e
+          rescue StandardError => e
+            handle_exception(e, level: :warn, operation: 'knowledge.manifest_store.save', corpus_path: corpus_path)
             false
           end
 

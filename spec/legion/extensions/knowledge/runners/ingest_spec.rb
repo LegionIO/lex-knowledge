@@ -145,6 +145,82 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
     end
   end
 
+  describe 'LLM ingest filtering' do
+    let(:chunk_a) do
+      { content: 'Useful architecture notes', content_hash: 'hash_a', source_file: '/tmp/a.md', chunk_index: 0 }
+    end
+    let(:chunk_b) do
+      { content: 'Boilerplate navigation text', content_hash: 'hash_b', source_file: '/tmp/a.md', chunk_index: 1 }
+    end
+    let(:llm_double) { double('Legion::LLM') }
+
+    before do
+      described_class.send(:filter_cache).clear
+      allow(described_class).to receive(:settings).and_return(
+        ingest: { filter_prompt: 'Keep useful architecture notes only.', filter_threshold: 0.7 }
+      )
+      stub_const('Legion::LLM', llm_double)
+      allow(llm_double).to receive(:respond_to?).with(:structured).and_return(true)
+    end
+
+    it 'drops chunks whose structured filter result is not relevant enough' do
+      allow(llm_double).to receive(:structured).and_return(
+        { data: { relevant: true, confidence: 0.9, reason: 'useful' } },
+        { data: { relevant: false, confidence: 0.2, reason: 'noise' } }
+      )
+
+      filtered = described_class.send(:filter_chunks, [chunk_a, chunk_b], filter: true)
+
+      expect(filtered).to eq([chunk_a])
+    end
+
+    it 'caches filter results by content hash' do
+      duplicate = chunk_a.merge(content: 'Useful architecture notes repeated')
+
+      allow(llm_double).to receive(:structured).and_return(
+        { data: { relevant: true, confidence: 0.9, reason: 'useful' } },
+        { data: { relevant: false, confidence: 0.2, reason: 'noise' } }
+      )
+
+      filtered = described_class.send(:filter_chunks, [chunk_a, duplicate, chunk_b], filter: true)
+
+      expect(filtered).to eq([chunk_a, duplicate])
+      expect(llm_double).to have_received(:structured).twice
+    end
+
+    it 'bypasses the LLM when filter is disabled' do
+      expect(llm_double).not_to receive(:structured)
+
+      filtered = described_class.send(:filter_chunks, [chunk_a, chunk_b], filter: false)
+
+      expect(filtered).to eq([chunk_a, chunk_b])
+    end
+
+    it 'counts filtered chunks as skipped before embedding' do
+      allow(Legion::Extensions::Knowledge::Helpers::Parser).to receive(:parse).and_return([{ content: 'parsed' }])
+      allow(Legion::Extensions::Knowledge::Helpers::Chunker).to receive(:chunk).and_return([chunk_a, chunk_b])
+      allow(described_class).to receive(:filter_chunks).and_return([chunk_a])
+      allow(described_class).to receive(:batch_embed_chunks).with([chunk_a], force: false)
+                                                            .and_return([{ chunk: chunk_a, embedding: nil, exists: false }])
+      allow(described_class).to receive(:upsert_chunk_with_embedding).and_return(:created)
+
+      result = described_class.send(:process_file, '/tmp/a.md', dry_run: false, force: false, filter: true)
+
+      expect(result).to eq({ created: 1, skipped: 1, updated: 0 })
+    end
+
+    it 'accepts filter false on the public single-file ingest runner' do
+      allow(described_class).to receive(:process_file)
+        .with('/tmp/a.md', dry_run: false, force: false, filter: false)
+        .and_return({ created: 1, skipped: 0, updated: 0 })
+
+      result = described_class.ingest_file(file_path: '/tmp/a.md', filter: false)
+
+      expect(result[:success]).to be true
+      expect(result[:chunks_created]).to eq(1)
+    end
+  end
+
   describe '#ingest_content' do
     it 'accepts string content directly' do
       result = described_class.ingest_content(
@@ -218,31 +294,69 @@ RSpec.describe Legion::Extensions::Knowledge::Runners::Ingest do
       it 'returns :skipped and emits a warn log when handle_ingest returns success: false' do
         allow(described_class).to receive(:ingest_to_apollo)
           .and_return({ success: false, error: 'PG::StringDataRightTruncation' })
-        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
+        expect(described_class.log).to receive(:warn).with(/apollo persistence not confirmed/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
 
       it 'returns :skipped when handle_ingest returns a non-Hash result' do
         allow(described_class).to receive(:ingest_to_apollo).and_return(nil)
-        expect(Legion::Logging).to receive(:warn).with(/non-hash result class=NilClass/)
+        expect(described_class.log).to receive(:warn).with(/non-hash result class=NilClass/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
 
       it 'returns :skipped when handle_ingest returns a hash without success' do
         allow(described_class).to receive(:ingest_to_apollo).and_return({ entry_id: 42 })
-        expect(Legion::Logging).to receive(:warn).with(/apollo persistence not confirmed/)
+        expect(described_class.log).to receive(:warn).with(/apollo persistence not confirmed/)
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
 
       it 'returns :skipped and logs when ingest_to_apollo raises' do
         allow(described_class).to receive(:ingest_to_apollo).and_raise(StandardError, 'boom')
-        expect(Legion::Logging).to receive(:warn).with(/unexpected error/)
+        expect(described_class).to receive(:handle_exception).with(
+          instance_of(StandardError),
+          hash_including(level: :warn, operation: 'knowledge.ingest.upsert_chunk')
+        )
         outcome = described_class.send(:upsert_chunk_with_embedding, chunk, embedding)
         expect(outcome).to eq(:skipped)
       end
+    end
+  end
+
+  describe '.ingest_to_apollo' do
+    let(:chunk) do
+      {
+        content:      'Chunk contents for Apollo context.',
+        content_hash: 'abcdef0123456789abcdef0123456789',
+        source_file:  '/tmp/context.md',
+        heading:      'Context',
+        section_path: ['Context'],
+        chunk_index:  4,
+        token_count:  7
+      }
+    end
+
+    before do
+      stub_const('Legion::Extensions::Apollo', Module.new)
+      runners_mod = Module.new
+      knowledge_mod = Module.new
+      knowledge_mod.define_singleton_method(:handle_ingest) { |**| { success: true } }
+      runners_mod.const_set(:Knowledge, knowledge_mod)
+      stub_const('Legion::Extensions::Apollo::Runners', runners_mod)
+    end
+
+    it 'passes chunk metadata as Apollo context for neighbor retrieval' do
+      expect(Legion::Extensions::Apollo::Runners::Knowledge).to receive(:handle_ingest).with(
+        hash_including(
+          content:  chunk[:content],
+          context:  hash_including(source_file: '/tmp/context.md', chunk_index: 4),
+          metadata: hash_including(source_file: '/tmp/context.md', chunk_index: 4)
+        )
+      ).and_return({ success: true })
+
+      described_class.send(:ingest_to_apollo, chunk, nil)
     end
   end
 

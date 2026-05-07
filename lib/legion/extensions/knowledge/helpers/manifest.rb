@@ -7,6 +7,8 @@ module Legion
     module Knowledge
       module Helpers
         module Manifest
+          extend Legion::Logging::Helper
+
           module_function
 
           def scan(path:, extensions: %w[.md .txt .docx .pdf])
@@ -25,14 +27,9 @@ module Legion
               results << build_entry(entry)
             end
           rescue Errno::EPERM, Errno::EACCES, Errno::ELOOP, Errno::ENOENT => e
-            log.debug("[manifest] skipping unreadable #{entry}: #{e.class}: #{e.message}")
+            handle_exception(e, level: :warn, operation: 'knowledge.manifest.walk', entry: entry)
           end
           private_class_method :walk
-
-          def log
-            Legion::Logging
-          end
-          private_class_method :log
 
           def diff(current:, previous:)
             current_map  = current.to_h { |e| [e[:path], e[:sha256]] }
