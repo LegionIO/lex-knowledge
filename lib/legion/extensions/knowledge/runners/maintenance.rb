@@ -296,7 +296,7 @@ module Legion
           def query_count
             return 0 unless Helpers::ApolloModels.access_log_available?
 
-            Helpers::ApolloModels.access_log.where(action: 'knowledge_query').count
+            Helpers::ApolloModels.access_log.where(action: 'query').count
           rescue StandardError => e
             handle_exception(e, level: :warn, operation: 'knowledge.maintenance.query_count')
             0

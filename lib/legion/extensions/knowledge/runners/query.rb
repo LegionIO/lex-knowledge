@@ -181,11 +181,14 @@ module Legion
                          "Context:\n#{context_text}\n\nQuestion: #{question}\n\nAnswer:"
                      end
 
-            result = llm_chat(message: prompt, caller: { extension: 'lex-knowledge' })
-            result.is_a?(Hash) ? result[:content] : result
+            result = Legion::LLM.chat( # rubocop:disable Legion/HelperMigration/DirectLlm
+              message: prompt,
+              caller:  { extension: 'lex-knowledge' }
+            )
+            result.is_a?(Hash) ? result[:content] : result.content
           rescue StandardError => e
             handle_exception(e, level: :warn, operation: 'knowledge.query.synthesize_answer')
-            "Error generating answer: #{e.message}"
+            nil
           end
           private_class_method :synthesize_answer
 

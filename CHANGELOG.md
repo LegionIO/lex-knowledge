@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.15] - 2026-05-07
+
+### Fixed
+- Knowledge ingest now sends Apollo chunk provenance through `context:` while retaining metadata compatibility, so source file, heading, section path, chunk index, and token count persist with document chunks.
+- Batch embedding now falls back to per-chunk `Legion::LLM.embed` when `embed_batch` is unavailable.
+- Retired corpus files now emit explicit observation entries tagged `retired` instead of using an Apollo-unknown `document_retired` content type.
+- Retrieval and synthesis failures are logged through helper-based exception handling, and synthesis returns `nil` instead of presenting error strings as answers.
+- Monitor-only installs now enable the maintenance actor without requiring `corpus_path`.
+- Quality reports count Apollo query access logs with the `query` action recorded by lex-apollo.
+
 ## [0.6.14] - 2026-05-06
 
 ### Changed

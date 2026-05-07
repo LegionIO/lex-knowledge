@@ -21,16 +21,20 @@ module Legion
           end
 
           def enabled? # rubocop:disable Legion/Extension/ActorEnabledSideEffects
-            return false unless corpus_path && !corpus_path.empty?
+            return true if corpus_path && !corpus_path.empty?
 
-            true
+            Runners::Monitor.resolve_monitors.any?
           rescue StandardError => e
             handle_exception(e, level: :warn, operation: 'knowledge.maintenance_runner.enabled')
             false
           end
 
           def args
-            { path: corpus_path }
+            path = corpus_path
+            return { path: path } if path && !path.empty?
+
+            monitors = Runners::Monitor.resolve_monitors
+            monitors.any? ? { path: monitors.first[:path] } : { path: nil }
           end
 
           private

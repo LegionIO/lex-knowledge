@@ -240,7 +240,7 @@ module Legion
           private_class_method :build_exists_map
 
           def llm_embed_available?
-            defined?(Legion::LLM) && Legion::LLM.respond_to?(:embed_batch)
+            defined?(Legion::LLM) && (Legion::LLM.respond_to?(:embed_batch) || Legion::LLM.respond_to?(:embed))
           end
           private_class_method :llm_embed_available?
 
@@ -250,9 +250,19 @@ module Legion
           private_class_method :paired_without_embed
 
           def build_embed_map(needs_embed)
-            results = Legion::LLM.embed_batch(needs_embed.map { |c| c[:content] }) # rubocop:disable Legion/HelperMigration/DirectLlm
-            results.each_with_object({}) do |r, h|
-              h[needs_embed[r[:index]][:content_hash]] = r[:vector] unless r[:error]
+            if Legion::LLM.respond_to?(:embed_batch)
+              results = Legion::LLM.embed_batch(needs_embed.map { |c| c[:content] }) # rubocop:disable Legion/HelperMigration/DirectLlm
+              results.each_with_object({}) do |r, h|
+                h[needs_embed[r[:index]][:content_hash]] = r[:vector] unless r[:error]
+              end
+            else
+              needs_embed.each_with_object({}) do |chunk, h|
+                result = Legion::LLM.embed(chunk[:content]) # rubocop:disable Legion/HelperMigration/DirectLlm
+                vector = result.is_a?(Hash) ? result[:vector] : result
+                h[chunk[:content_hash]] = vector if vector.is_a?(Array) && vector.any?
+              rescue StandardError => e
+                log.warn(e.message)
+              end
             end
           rescue StandardError => e
             handle_exception(e, level: :warn, operation: 'knowledge.ingest.build_embed_map')
@@ -328,10 +338,10 @@ module Legion
             return unless Legion::Apollo.respond_to?(:ingest) && Legion::Apollo.started?
 
             Legion::Apollo.ingest( # rubocop:disable Legion/HelperMigration/DirectKnowledge
-              content:      file_path,
-              content_type: 'document_retired',
+              content:      "Retired document: #{file_path}",
+              content_type: 'observation',
               tags:         [file_path, 'retired', 'document_chunk'].uniq,
-              metadata:     { source_file: file_path, retired: true }
+              context:      { source_file: file_path, retired: true }
             )
           rescue StandardError => e
             handle_exception(e, level: :warn, operation: 'knowledge.ingest.retire_file', file_path: file_path)
