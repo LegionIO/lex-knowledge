@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.11] - 2026-05-03
+
+### Fixed
+- Knowledge query synthesis now passes prompts directly into native `Legion::LLM.chat` dispatch instead of routing through the legacy nil-input `llm_chat` helper path.
+
 ## [0.6.10] - 2026-04-28
 
 ### Fixed
