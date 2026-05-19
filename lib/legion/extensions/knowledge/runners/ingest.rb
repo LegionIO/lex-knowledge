@@ -320,12 +320,14 @@ module Legion
               token_count:  chunk[:token_count]
             }
             payload = {
-              content:      chunk[:content],
-              content_type: 'document_chunk',
-              content_hash: chunk[:content_hash],
-              tags:         [chunk[:source_file], chunk[:heading], 'document_chunk'].compact.uniq,
-              context:      context,
-              metadata:     context
+              content:        chunk[:content],
+              content_type:   'document_chunk',
+              content_hash:   chunk[:content_hash],
+              tags:           [chunk[:source_file], chunk[:heading], 'document_chunk'].compact.uniq,
+              source_agent:   'lex-knowledge',
+              source_channel: 'corpus_ingest',
+              context:        context,
+              metadata:       context
             }
             payload[:embedding] = embedding if embedding
 
